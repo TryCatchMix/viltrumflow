@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist/
+.angular/
+.ng_build/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+coverage/
+.nyc_output/
+e2e/
+*.spec.ts
+
+# Environment
+.env
+.env.local
+.env.*.local
+environment.ts
+!environment.prod.ts
+
+# Logs
+*.log
+logs/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+README.md
+docs/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Misc
+.editorconfig
+.browserslistrc
+karma.conf.js
+tsconfig.spec.json
