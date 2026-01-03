@@ -276,7 +276,7 @@ Este proyecto está bajo la Licencia MIT. Ver `LICENSE` para más detalles.
 
 ## 👥 Autores
 
-- Tu Nombre - [@tu-usuario](https://github.com/tu-usuario)
+- TryCatchMix - [@TryCatchMix](https://github.com/TryCatchMix)
 
 ## 🙏 Agradecimientos
 
