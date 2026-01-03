@@ -1,26 +1,146 @@
+version: '3.8'
 
 services:
+  # Base de datos PostgreSQL
   db:
-    image: postgres:15
+    image: postgres:16-alpine
+    container_name: viltrumflow_db
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: viltrumflow
-      POSTGRES_USER: viltrum
-      POSTGRES_PASSWORD: secret
+      POSTGRES_USER: ${DB_USER:-viltrumuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-viltrumpass}
+      POSTGRES_DB: ${DB_NAME:-viltrumflow}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-viltrumuser}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - viltrumflow_network
 
+  # Redis para caché y colas
+  redis:
+    image: redis:7-alpine
+    container_name: viltrumflow_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - viltrumflow_network
+
+  # Backend FastAPI
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: viltrumflow_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-viltrumuser}:${DB_PASSWORD:-viltrumpass}@db:5432/${DB_NAME:-viltrumflow}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-this-in-production}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      REFRESH_TOKEN_EXPIRE_DAYS: 7
+      BACKEND_CORS_ORIGINS: '["http://localhost:4200","http://localhost:80","http://localhost"]'
+      ENVIRONMENT: development
+      PROJECT_NAME: ViltrumFlow
+    volumes:
+      - ./backend:/app
+      - backend_logs:/app/logs
     ports:
       - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - viltrumflow_network
+
+  # Frontend Angular
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: viltrumflow_frontend
+    restart: unless-stopped
     environment:
-      DATABASE_URL: postgres://viltrum:secret@db:5432/viltrumflow
+      - NODE_ENV=development
+      - API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "4200:4200"
+    depends_on:
+      - backend
+    command: npm start -- --host 0.0.0.0 --poll 2000
+    networks:
+      - viltrumflow_network
+
+  # Nginx (Reverse Proxy)
+  nginx:
+    image: nginx:alpine
+    container_name: viltrumflow_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - viltrumflow_network
+
+  # PgAdmin para gestión de DB
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: viltrumflow_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@viltrumflow.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin123}
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
     depends_on:
       - db
-    volumes:
-      - ./backend/app:/app/app
+    networks:
+      - viltrumflow_network
 
 volumes:
-  pgdata:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  backend_logs:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  viltrumflow_network:
+    driver: bridge
