@@ -1,18 +1,30 @@
-# Usamos Python oficial
-FROM python:3.12-slim
+FROM python:3.11-slim
 
-# Set workdir
 WORKDIR /app
 
-# Copiamos requirements y los instalamos
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y \
+    gcc \
+    postgresql-client \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar requirements
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiamos el código
-COPY ./app ./app
+# Instalar dependencias de Python
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Exponemos el puerto
+# Copiar código
+COPY . .
+
+# Crear directorio de logs
+RUN mkdir -p /app/logs
+
 EXPOSE 8000
 
-# Comando por defecto para desarrollo
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--reload"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
