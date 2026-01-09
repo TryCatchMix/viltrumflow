@@ -1,10 +1,11 @@
 import { Component, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { Project, Status, Task, User } from '../../models';
+
 import { AuthService } from '../../services/auth.service';
-import { TaskService } from '../../services/task.service';
+import { CommonModule } from '@angular/common';
 import { ProjectService } from '../../services/project.service';
-import { User, Task, Project, Status } from '../../models';
+import { RouterModule } from '@angular/router';
+import { TaskService } from '../../services/task.service';
 
 @Component({
   selector: 'app-dashboard',
