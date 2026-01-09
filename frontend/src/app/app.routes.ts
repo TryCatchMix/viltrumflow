@@ -1,5 +1,6 @@
 import { DashboardComponent } from './components/dashboard/dashboard.component';
 import { LoginComponent } from './components/login/login.component';
+import { ProjectsListComponent } from './components/projects-list/projects-list.component';
 import { RegisterComponent } from './components/register/register.component';
 import { Routes } from '@angular/router';
 import { TasksListComponent } from './components/tasks-list/tasks-list.component';
@@ -17,6 +18,11 @@ export const routes: Routes = [
   {
     path: 'tasks',
     component: TasksListComponent,
+    canActivate: [authGuard]
+  },
+  {
+    path: 'projects',
+    component: ProjectsListComponent,
     canActivate: [authGuard]
   },
   { path: '**', redirectTo: '/dashboard' }

@@ -1,8 +1,10 @@
 import { Component, OnInit } from '@angular/core';
+import { Priority, Status, Task } from '../../models';
+
+import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TaskService } from '../../services/task.service';
-import { Task, Status, Priority } from '../../models';
 
 @Component({
   selector: 'app-tasks-list',
@@ -488,16 +490,28 @@ export class TasksListComponent implements OnInit {
     due_date: ''
   };
 
-  constructor(private taskService: TaskService) {}
+  selectedProjectId: number | null = null;
+
+  constructor(
+    private taskService: TaskService,
+    private route: ActivatedRoute
+  ) {}
 
   ngOnInit(): void {
-    this.loadTasks();
+    // Obtener project_id de query params si existe
+    this.route.queryParams.subscribe(params => {
+      if (params['project']) {
+        this.selectedProjectId = +params['project'];
+      }
+      this.loadTasks();
+    });
   }
 
   loadTasks(): void {
     this.taskService.getTasks({
       status: this.filterStatus || undefined,
       priority: this.filterPriority || undefined,
+      project_id: this.selectedProjectId || undefined,
       limit: 100
     }).subscribe({
       next: (tasks) => {
