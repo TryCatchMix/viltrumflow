@@ -18,7 +18,14 @@ import { TaskService } from '../../services/task.service';
         <div class="header-content">
           <h1>ViltrumFlow</h1>
           <div class="user-menu">
-            <span>{{ currentUser?.username }}</span>
+            <a [routerLink]="['/profile']" class="user-link">
+              <img
+                [src]="currentUser?.avatar_url || 'https://ui-avatars.com/api/?name=' + (currentUser?.username || 'U') + '&size=40&background=667eea&color=fff'"
+                class="user-avatar"
+                [alt]="currentUser?.username"
+              />
+              <span>{{ currentUser?.username }}</span>
+            </a>
             <button (click)="logout()" class="btn-logout">Cerrar Sesión</button>
           </div>
         </div>
@@ -143,6 +150,29 @@ import { TaskService } from '../../services/task.service';
       display: flex;
       align-items: center;
       gap: 15px;
+    }
+
+    .user-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: #333;
+      padding: 8px 12px;
+      border-radius: 8px;
+      transition: background 0.3s;
+    }
+
+    .user-link:hover {
+      background: #f5f5f5;
+    }
+
+    .user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #667eea;
     }
 
     .btn-logout {
