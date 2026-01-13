@@ -1,9 +1,12 @@
 import { Component, OnInit } from '@angular/core';
-import { Priority, Status, Task } from '../../models';
+import { Priority, Project, Status, Task } from '../../models';
+import { Subject, debounceTime } from 'rxjs';
 
 import { ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { NotificationService } from '../../services/notification.service';
+import { ProjectService } from '../../services/project.service';
 import { TaskService } from '../../services/task.service';
 
 @Component({
@@ -19,28 +22,102 @@ import { TaskService } from '../../services/task.service';
         </button>
       </div>
 
-      <!-- Filtros -->
-      <div class="filters">
-        <select [(ngModel)]="filterStatus" (change)="loadTasks()">
-          <option [ngValue]="null">Todos los estados</option>
-          <option value="todo">Por Hacer</option>
-          <option value="in_progress">En Progreso</option>
-          <option value="review">En Revisión</option>
-          <option value="completed">Completadas</option>
-        </select>
+      <!-- Barra de Búsqueda -->
+      <div class="search-bar">
+        <div class="search-input-wrapper">
+          <span class="search-icon">🔍</span>
+          <input
+            type="text"
+            class="search-input"
+            [(ngModel)]="searchTerm"
+            (ngModelChange)="onSearchChange($event)"
+            placeholder="Buscar tareas por título o descripción..."
+          />
+          <button
+            class="clear-search"
+            *ngIf="searchTerm"
+            (click)="searchTerm = ''; onSearchChange('')"
+          >
+            ×
+          </button>
+        </div>
+        <button
+          class="btn-filters"
+          (click)="showFilters = !showFilters"
+          [class.active]="showFilters"
+        >
+          🎯 Filtros
+          <span class="filter-badge" *ngIf="hasActiveFilters">{{ (filterStatus ? 1 : 0) + (filterPriority ? 1 : 0) + (filterProject ? 1 : 0) }}</span>
+        </button>
+      </div>
 
-        <select [(ngModel)]="filterPriority" (change)="loadTasks()">
-          <option [ngValue]="null">Todas las prioridades</option>
-          <option value="low">Baja</option>
-          <option value="medium">Media</option>
-          <option value="high">Alta</option>
-          <option value="urgent">Urgente</option>
-        </select>
+      <!-- Panel de Filtros Avanzados -->
+      <div class="filters-panel" *ngIf="showFilters">
+        <div class="filters-row">
+          <div class="filter-group">
+            <label>Estado</label>
+            <select [(ngModel)]="filterStatus" (change)="loadTasks()">
+              <option [ngValue]="null">Todos</option>
+              <option value="todo">Por Hacer</option>
+              <option value="in_progress">En Progreso</option>
+              <option value="review">En Revisión</option>
+              <option value="completed">Completadas</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label>Prioridad</label>
+            <select [(ngModel)]="filterPriority" (change)="loadTasks()">
+              <option [ngValue]="null">Todas</option>
+              <option value="low">Baja</option>
+              <option value="medium">Media</option>
+              <option value="high">Alta</option>
+              <option value="urgent">Urgente</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label>Proyecto</label>
+            <select [(ngModel)]="filterProject" (change)="loadTasks()">
+              <option [ngValue]="null">Todos los proyectos</option>
+              <option *ngFor="let project of projects" [ngValue]="project.id">
+                {{ project.icon }} {{ project.name }}
+              </option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label>Ordenar por</label>
+            <select [(ngModel)]="sortBy" (change)="performSearch()">
+              <option value="created">Fecha de creación</option>
+              <option value="due_date">Fecha de vencimiento</option>
+              <option value="priority">Prioridad</option>
+              <option value="title">Título</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label>Orden</label>
+            <select [(ngModel)]="sortOrder" (change)="performSearch()">
+              <option value="asc">Ascendente</option>
+              <option value="desc">Descendente</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="filters-actions">
+          <button class="btn-clear-filters" (click)="clearFilters()" *ngIf="hasActiveFilters">
+            ✗ Limpiar filtros
+          </button>
+          <span class="results-count">
+            {{ filteredTasks.length }} de {{ tasks.length }} tareas
+          </span>
+        </div>
       </div>
 
       <!-- Lista de Tareas -->
-      <div class="tasks-container" *ngIf="tasks.length > 0; else noTasks">
-        <div class="task-card" *ngFor="let task of tasks">
+      <div class="tasks-container" *ngIf="filteredTasks.length > 0; else noTasks">
+        <div class="task-card" *ngFor="let task of filteredTasks">
           <div class="task-header">
             <div class="task-title-section">
               <div class="priority-indicator" [class]="task.priority"></div>
@@ -153,6 +230,16 @@ import { TaskService } from '../../services/task.service';
                 [(ngModel)]="taskForm.due_date"
               />
             </div>
+
+            <div class="form-group">
+              <label>Proyecto</label>
+              <select [(ngModel)]="taskForm.project_id">
+                <option [ngValue]="null">Sin proyecto</option>
+                <option *ngFor="let project of projects" [ngValue]="project.id">
+                  {{ project.icon }} {{ project.name }}
+                </option>
+              </select>
+            </div>
           </div>
 
           <div class="modal-footer">
@@ -181,6 +268,173 @@ import { TaskService } from '../../services/task.service';
       margin: 0;
       font-size: 28px;
       color: #333;
+    }
+
+    .search-bar {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .search-input-wrapper {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 15px;
+      font-size: 18px;
+      color: #999;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 12px 45px 12px 45px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+      box-sizing: border-box;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .clear-search {
+      position: absolute;
+      right: 10px;
+      background: none;
+      border: none;
+      font-size: 24px;
+      color: #999;
+      cursor: pointer;
+      padding: 5px;
+      line-height: 1;
+    }
+
+    .clear-search:hover {
+      color: #666;
+    }
+
+    .btn-filters {
+      padding: 12px 20px;
+      background: white;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+    }
+
+    .btn-filters:hover,
+    .btn-filters.active {
+      border-color: #667eea;
+      color: #667eea;
+    }
+
+    .filter-badge {
+      background: #f44336;
+      color: white;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+
+    .filters-panel {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+      animation: slideDown 0.3s ease;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .filters-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .filter-group label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+    }
+
+    .filter-group select {
+      padding: 10px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      background: white;
+      transition: border-color 0.3s;
+    }
+
+    .filter-group select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .filters-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 15px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .btn-clear-filters {
+      padding: 8px 16px;
+      background: #f44336;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: background 0.3s;
+    }
+
+    .btn-clear-filters:hover {
+      background: #d32f2f;
+    }
+
+    .results-count {
+      font-size: 13px;
+      color: #999;
+      font-weight: 500;
     }
 
     .filters {
@@ -494,7 +748,8 @@ export class TasksListComponent implements OnInit {
 
   constructor(
     private taskService: TaskService,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private notificationService: NotificationService
   ) {}
 
   ngOnInit(): void {
@@ -511,14 +766,88 @@ export class TasksListComponent implements OnInit {
     this.taskService.getTasks({
       status: this.filterStatus || undefined,
       priority: this.filterPriority || undefined,
-      project_id: this.selectedProjectId || undefined,
+      project_id: this.filterProject || this.selectedProjectId || undefined,
       limit: 100
     }).subscribe({
       next: (tasks) => {
         this.tasks = tasks;
+        this.filteredTasks = tasks;
+        this.performSearch();
       },
       error: (error) => console.error('Error loading tasks:', error)
     });
+  }
+
+  onSearchChange(term: string): void {
+    this.searchTerm = term;
+    this.searchSubject.next(term);
+  }
+
+  performSearch(): void {
+    let results = [...this.tasks];
+
+    // Búsqueda por término
+    if (this.searchTerm.trim()) {
+      const term = this.searchTerm.toLowerCase();
+      results = results.filter(task =>
+        task.title.toLowerCase().includes(term) ||
+        (task.description && task.description.toLowerCase().includes(term))
+      );
+    }
+
+    // Ordenamiento
+    results = this.sortTasks(results);
+
+    this.filteredTasks = results;
+  }
+
+  sortTasks(tasks: Task[]): Task[] {
+    return tasks.sort((a, b) => {
+      let comparison = 0;
+
+      switch (this.sortBy) {
+        case 'title':
+          comparison = a.title.localeCompare(b.title);
+          break;
+        case 'due_date':
+          const dateA = a.due_date ? new Date(a.due_date).getTime() : 0;
+          const dateB = b.due_date ? new Date(b.due_date).getTime() : 0;
+          comparison = dateA - dateB;
+          break;
+        case 'priority':
+          const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
+          comparison = priorityOrder[a.priority] - priorityOrder[b.priority];
+          break;
+        case 'created':
+        default:
+          comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          break;
+      }
+
+      return this.sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }
+
+  toggleSort(field: 'created' | 'due_date' | 'priority' | 'title'): void {
+    if (this.sortBy === field) {
+      this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortBy = field;
+      this.sortOrder = 'desc';
+    }
+    this.performSearch();
+  }
+
+  clearFilters(): void {
+    this.filterStatus = null;
+    this.filterPriority = null;
+    this.filterProject = null;
+    this.searchTerm = '';
+    this.loadTasks();
+  }
+
+  get hasActiveFilters(): boolean {
+    return !!(this.filterStatus || this.filterPriority || this.filterProject || this.searchTerm);
   }
 
   editTask(task: Task): void {
@@ -528,14 +857,15 @@ export class TasksListComponent implements OnInit {
       description: task.description || '',
       status: task.status,
       priority: task.priority,
-      due_date: task.due_date ? task.due_date.split('T')[0] : ''
+      due_date: task.due_date ? task.due_date.split('T')[0] : '',
+      project_id: task.project_id || null
     };
     this.showCreateModal = true;
   }
 
   saveTask(): void {
     if (!this.taskForm.title) {
-      alert('El título es requerido');
+      this.notificationService.warning('El título de la tarea es requerido', 'Campo obligatorio');
       return;
     }
 
@@ -547,18 +877,26 @@ export class TasksListComponent implements OnInit {
     if (this.editingTask) {
       this.taskService.updateTask(this.editingTask.id, taskData).subscribe({
         next: () => {
+          this.notificationService.success('La tarea ha sido actualizada correctamente', 'Tarea actualizada');
           this.loadTasks();
           this.closeModal();
         },
-        error: (error) => console.error('Error updating task:', error)
+        error: (error) => {
+          console.error('Error updating task:', error);
+          this.notificationService.error('No se pudo actualizar la tarea', 'Error');
+        }
       });
     } else {
       this.taskService.createTask(taskData).subscribe({
         next: () => {
+          this.notificationService.success('La tarea ha sido creada correctamente', 'Tarea creada');
           this.loadTasks();
           this.closeModal();
         },
-        error: (error) => console.error('Error creating task:', error)
+        error: (error) => {
+          console.error('Error creating task:', error);
+          this.notificationService.error('No se pudo crear la tarea', 'Error');
+        }
       });
     }
   }
@@ -570,9 +908,13 @@ export class TasksListComponent implements OnInit {
 
     this.taskService.deleteTask(id).subscribe({
       next: () => {
+        this.notificationService.success('La tarea ha sido eliminada', 'Tarea eliminada');
         this.loadTasks();
       },
-      error: (error) => console.error('Error deleting task:', error)
+      error: (error) => {
+        console.error('Error deleting task:', error);
+        this.notificationService.error('No se pudo eliminar la tarea', 'Error');
+      }
     });
   }
 
@@ -580,9 +922,13 @@ export class TasksListComponent implements OnInit {
     const status = event.target.value as Status;
     this.taskService.updateTaskStatus(taskId, status).subscribe({
       next: () => {
+        this.notificationService.info('El estado de la tarea ha sido actualizado', 'Estado actualizado');
         this.loadTasks();
       },
-      error: (error) => console.error('Error updating status:', error)
+      error: (error) => {
+        console.error('Error updating status:', error);
+        this.notificationService.error('No se pudo actualizar el estado', 'Error');
+      }
     });
   }
 
@@ -594,7 +940,8 @@ export class TasksListComponent implements OnInit {
       description: '',
       status: Status.TODO,
       priority: Priority.MEDIUM,
-      due_date: ''
+      due_date: '',
+      project_id: null
     };
   }
 

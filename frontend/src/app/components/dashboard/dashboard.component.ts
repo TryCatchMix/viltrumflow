@@ -1,10 +1,11 @@
 import { Component, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { Priority, Project, Status, Task, User } from '../../models';
+
 import { AuthService } from '../../services/auth.service';
-import { TaskService } from '../../services/task.service';
+import { CommonModule } from '@angular/common';
 import { ProjectService } from '../../services/project.service';
-import { User, Task, Project, Status, Priority } from '../../models';
+import { RouterModule } from '@angular/router';
+import { TaskService } from '../../services/task.service';
 
 interface ActivityItem {
   type: 'task_created' | 'task_completed' | 'task_updated' | 'project_created';
@@ -27,8 +28,8 @@ interface ActivityItem {
           <h1>ViltrumFlow</h1>
           <div class="user-menu">
             <a [routerLink]="['/profile']" class="user-link">
-              <img 
-                [src]="currentUser?.avatar_url || 'https://ui-avatars.com/api/?name=' + (currentUser?.username || 'U') + '&size=40&background=667eea&color=fff'" 
+              <img
+                [src]="currentUser?.avatar_url || 'https://ui-avatars.com/api/?name=' + (currentUser?.username || 'U') + '&size=40&background=667eea&color=fff'"
                 class="user-avatar"
                 [alt]="currentUser?.username"
               />
@@ -177,8 +178,8 @@ interface ActivityItem {
                   <div class="day-name" *ngFor="let day of dayNames">{{ day }}</div>
                 </div>
                 <div class="calendar-body">
-                  <div 
-                    class="calendar-day" 
+                  <div
+                    class="calendar-day"
                     *ngFor="let day of calendarDays"
                     [class.other-month]="!day.isCurrentMonth"
                     [class.today]="day.isToday"
@@ -207,7 +208,7 @@ interface ActivityItem {
                     <span class="priority-count">{{ item.count }}</span>
                   </div>
                   <div class="priority-bar">
-                    <div 
+                    <div
                       class="priority-fill"
                       [class]="item.priority"
                       [style.width.%]="item.percentage"
@@ -888,15 +889,15 @@ export class DashboardComponent implements OnInit {
     inProgress: 0,
     completed: 0
   };
-  
+
   // Calendar
   currentDate: Date = new Date();
   calendarDays: any[] = [];
   dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-  
+
   // Priority Distribution
   priorityDistribution: any[] = [];
-  
+
   // Activity
   recentActivity: ActivityItem[] = [];
 
@@ -966,17 +967,17 @@ export class DashboardComponent implements OnInit {
   generateCalendar(): void {
     const year = this.currentDate.getFullYear();
     const month = this.currentDate.getMonth();
-    
+
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const prevLastDay = new Date(year, month, 0);
-    
+
     const firstDayWeek = firstDay.getDay();
     const lastDayDate = lastDay.getDate();
     const prevLastDayDate = prevLastDay.getDate();
-    
+
     this.calendarDays = [];
-    
+
     // Previous month days
     for (let i = firstDayWeek - 1; i >= 0; i--) {
       const date = new Date(year, month - 1, prevLastDayDate - i);
@@ -987,7 +988,7 @@ export class DashboardComponent implements OnInit {
         taskCount: this.getTaskCountForDate(date)
       });
     }
-    
+
     // Current month days
     for (let i = 1; i <= lastDayDate; i++) {
       const date = new Date(year, month, i);
@@ -999,7 +1000,7 @@ export class DashboardComponent implements OnInit {
         taskCount: this.getTaskCountForDate(date)
       });
     }
-    
+
     // Next month days
     const remainingDays = 42 - this.calendarDays.length;
     for (let i = 1; i <= remainingDays; i++) {
@@ -1032,16 +1033,16 @@ export class DashboardComponent implements OnInit {
   }
 
   getMonthYear(): string {
-    const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+    const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     return `${months[this.currentDate.getMonth()]} ${this.currentDate.getFullYear()}`;
   }
 
   generateActivity(tasks: Task[]): void {
     this.recentActivity = [];
-    
+
     // Sort tasks by updated_at
-    const sortedTasks = [...tasks].sort((a, b) => 
+    const sortedTasks = [...tasks].sort((a, b) =>
       new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
     );
 
@@ -1119,7 +1120,7 @@ export class DashboardComponent implements OnInit {
     const today = new Date();
     const diffTime = due.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays < 0) return `Vencida hace ${Math.abs(diffDays)} días`;
     if (diffDays === 0) return 'Vence hoy';
     if (diffDays === 1) return 'Vence mañana';
@@ -1128,7 +1129,7 @@ export class DashboardComponent implements OnInit {
 
   getTimeAgo(date: Date): string {
     const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-    
+
     const intervals: { [key: string]: number } = {
       'año': 31536000,
       'mes': 2592000,
@@ -1145,7 +1146,7 @@ export class DashboardComponent implements OnInit {
         return `Hace ${interval} ${name}${interval > 1 ? 's' : ''}`;
       }
     }
-    
+
     return 'Justo ahora';
   }
 
