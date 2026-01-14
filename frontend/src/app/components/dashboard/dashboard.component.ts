@@ -1,11 +1,10 @@
 import { Component, OnInit } from '@angular/core';
-import { Priority, Project, Status, Task, User } from '../../models';
-
-import { AuthService } from '../../services/auth.service';
 import { CommonModule } from '@angular/common';
-import { ProjectService } from '../../services/project.service';
 import { RouterModule } from '@angular/router';
+import { AuthService } from '../../services/auth.service';
 import { TaskService } from '../../services/task.service';
+import { ProjectService } from '../../services/project.service';
+import { User, Task, Project, Status, Priority } from '../../models';
 
 interface ActivityItem {
   type: 'task_created' | 'task_completed' | 'task_updated' | 'project_created';
@@ -50,6 +49,9 @@ interface ActivityItem {
             </a>
             <a [routerLink]="['/tasks']" routerLinkActive="active">
               <span>✓</span> Mis Tareas
+            </a>
+            <a [routerLink]="['/kanban']" routerLinkActive="active">
+              <span>📋</span> Kanban
             </a>
             <a [routerLink]="['/projects']" routerLinkActive="active">
               <span>📁</span> Proyectos
