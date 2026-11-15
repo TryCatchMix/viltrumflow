@@ -1,86 +1,55 @@
-from pydantic_settings import BaseSettings
-from typing import List, Optional
 from functools import lru_cache
-import secrets
+from typing import List, Optional
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+INSECURE_SECRET = "dev-insecure-secret-change-me-please-32chars"
 
 
 class Settings(BaseSettings):
-    # Project Info
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
+
     PROJECT_NAME: str = "ViltrumFlow"
-    VERSION: str = "1.0.0"
+    VERSION: str = "2.0.0"
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
-    
-    # Database
-    DATABASE_URL: str
+
+    # SQLite por defecto para poder arrancar sin infraestructura; Postgres en Docker.
+    DATABASE_URL: str = "sqlite:///./viltrumflow.db"
     DB_ECHO: bool = False
-    
-    # Redis
-    REDIS_URL: str
-    
-    # Security
-    SECRET_KEY: str
+
+    SECRET_KEY: str = INSECURE_SECRET
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    
-    # CORS
-    BACKEND_CORS_ORIGINS: List[str] = [
-        "http://localhost:4200",
-        "http://localhost:80",
-        "http://localhost"
-    ]
-    
-    # Rate Limiting
-    RATE_LIMIT_PER_MINUTE: int = 60
-    
-    # File Upload
-    MAX_UPLOAD_SIZE: int = 52428800  # 50MB
-    ALLOWED_EXTENSIONS: List[str] = [
-        "jpg", "jpeg", "png", "gif", "pdf", 
-        "doc", "docx", "xls", "xlsx"
-    ]
-    
-    # Email (opcional)
-    SMTP_HOST: Optional[str] = None
-    SMTP_PORT: Optional[int] = None
-    SMTP_USER: Optional[str] = None
-    SMTP_PASSWORD: Optional[str] = None
-    SMTP_FROM: Optional[str] = None
-    
-    # Sentry
-    SENTRY_DSN: Optional[str] = None
-    
-    # Pagination
-    DEFAULT_PAGE_SIZE: int = 20
-    MAX_PAGE_SIZE: int = 100
-    
-    # Timezone
-    TZ: str = "Europe/Madrid"
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        
-    def generate_secret_key(self) -> str:
-        """Generate a secure random secret key"""
-        return secrets.token_urlsafe(32)
-    
+
+    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:4200", "http://localhost"]
+    ALLOWED_HOSTS: List[str] = ["*"]
+
+    # URL pública del frontend (destino tras el OAuth de Google)
+    FRONTEND_URL: str = "http://localhost:4200"
+
+    # Google Calendar (opcional). Sin estas variables la integración aparece como "no configurada".
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/calendar/callback"
+
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT == "production"
-    
+
     @property
-    def is_development(self) -> bool:
-        return self.ENVIRONMENT == "development"
+    def google_configured(self) -> bool:
+        return bool(self.GOOGLE_CLIENT_ID and self.GOOGLE_CLIENT_SECRET)
 
 
 @lru_cache()
 def get_settings() -> Settings:
-    """Get cached settings instance"""
-    return Settings()
+    s = Settings()
+    if s.is_production and (s.SECRET_KEY == INSECURE_SECRET or len(s.SECRET_KEY) < 32):
+        raise RuntimeError("SECRET_KEY debe definirse (≥32 caracteres) en producción")
+    return s
 
 
-# Instance
 settings = get_settings()
