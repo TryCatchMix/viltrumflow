@@ -5,9 +5,6 @@ import { RouterOutlet } from '@angular/router';
   selector: 'app-root',
   standalone: true,
   imports: [RouterOutlet],
-  template: '<router-outlet></router-outlet>',
-  styles: []
+  template: '<router-outlet />',
 })
-export class AppComponent {
-  title = 'viltrumflow';
-}
+export class AppComponent {}

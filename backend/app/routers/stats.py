@@ -70,7 +70,8 @@ def overview(
     for t in open_:
         by_priority[t.priority.value] += 1
 
-    due = [(t, _day(t.due_date, offset)) for t in open_ if t.due_date]
+    # Las tareas de día completo guardan la fecha a medianoche UTC: no se desplazan por zona horaria
+    due = [(t, t.due_date.date() if t.all_day else _day(t.due_date, offset)) for t in open_ if t.due_date]
     week_ago = today - timedelta(days=6)
     done_days = [_day(t.completed_at, offset) for t in live if t.completed_at]
     created_days = [_day(t.created_at, offset) for t in live]

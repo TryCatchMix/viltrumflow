@@ -10,7 +10,7 @@ from ..database import get_db
 from ..deps import get_current_user
 from ..models import Note, User
 from ..security import create_token_pair, decode_token, hash_password, verify_password
-from ..services.notes import sync_note_index
+from ..services.notes import resolve_dangling, sync_note_index
 
 router = APIRouter()
 
@@ -20,7 +20,7 @@ Este es tu **vault**: notas en Markdown enlazadas entre sí.
 
 ## Lo básico
 - Escribe `[[` para enlazar otra nota, por ejemplo [[Ideas]]. Si no existe, se crea al hacer clic.
-- Usa #etiquetas para clasificar. Esta nota tiene #inicio.
+- Clasifica con etiquetas: esta nota tiene #inicio.
 - Las casillas aparecen también en **Tareas → Casillas de notas**:
   - [ ] Crear mi primera nota
   - [ ] Abrir la vista de grafo
@@ -52,6 +52,7 @@ def register(data: schemas.UserCreate, db: Session = Depends(get_db)):
         db.add(note)
         db.flush()
         sync_note_index(db, note)
+        resolve_dangling(db, note)
     db.commit()
     db.refresh(user)
     return user

@@ -1,0 +1,61 @@
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Injectable, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
+import { Observable, finalize, shareReplay, tap } from 'rxjs';
+import { environment } from '../../environments/environment';
+import { Token, User } from './models';
+
+const ACCESS = 'vf-access', REFRESH = 'vf-refresh';
+
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  private http = inject(HttpClient);
+  private router = inject(Router);
+  private api = `${environment.apiUrl}/api/v1/auth`;
+  private refreshing$: Observable<Token> | null = null;
+
+  readonly user = signal<User | null>(null);
+
+  get accessToken() { return localStorage.getItem(ACCESS); }
+  isAuthenticated() { return !!this.accessToken; }
+
+  register(data: { email: string; username: string; password: string; full_name?: string }) {
+    return this.http.post<User>(`${this.api}/register`, data);
+  }
+
+  login(username: string, password: string) {
+    // El endpoint sigue OAuth2 «password»: application/x-www-form-urlencoded
+    const body = new HttpParams().set('username', username).set('password', password);
+    return this.http.post<Token>(`${this.api}/login`, body).pipe(tap(t => this.store(t)));
+  }
+
+  /** Una sola renovación en vuelo aunque fallen varias peticiones a la vez. */
+  refresh(): Observable<Token> {
+    if (!this.refreshing$) {
+      this.refreshing$ = this.http.post<Token>(`${this.api}/refresh`, { refresh_token: localStorage.getItem(REFRESH) }).pipe(
+        tap(t => this.store(t)),
+        finalize(() => (this.refreshing$ = null)),
+        shareReplay(1),
+      );
+    }
+    return this.refreshing$;
+  }
+
+  loadUser() { return this.http.get<User>(`${this.api}/me`).pipe(tap(u => this.user.set(u))); }
+  updateProfile(data: Partial<User>) { return this.http.put<User>(`${this.api}/me`, data).pipe(tap(u => this.user.set(u))); }
+  changePassword(current_password: string, new_password: string) {
+    return this.http.post<{ message: string }>(`${this.api}/change-password`, { current_password, new_password });
+  }
+
+  logout(redirect = true) {
+    localStorage.removeItem(ACCESS);
+    localStorage.removeItem(REFRESH);
+    this.user.set(null);
+    if (redirect) this.router.navigate(['/login']);
+  }
+
+  private store(t: Token) {
+    localStorage.setItem(ACCESS, t.access_token);
+    localStorage.setItem(REFRESH, t.refresh_token);
+  }
+}

@@ -41,3 +41,5 @@ def test_profile_and_password(client, auth):
 def test_new_user_gets_welcome_vault(client, auth):
     titles = {n["title"] for n in client.get("/api/v1/notes", headers=auth).json()}
     assert {"Bienvenido", "Ideas"} <= titles
+    graph = client.get("/api/v1/notes/graph", headers=auth).json()
+    assert all(n["kind"] == "note" for n in graph["nodes"]) and len(graph["edges"]) == 1
