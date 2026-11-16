@@ -11,6 +11,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from .config import settings
 from .database import SessionLocal, check_db_connection, init_db
 from .routers import attachments, auth, calendar, notes, projects, reminders, search, stats, tasks, trash
+from .services import google_calendar as gcal
 from .services.reminders import run_tick
 
 logging.basicConfig(
@@ -23,6 +24,7 @@ logger = logging.getLogger("viltrumflow")
 def _tick() -> None:
     with SessionLocal() as db:
         run_tick(db)
+        gcal.pull_all(db)
 
 
 async def _scheduler() -> None:

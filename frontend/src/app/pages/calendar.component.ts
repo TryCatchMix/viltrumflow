@@ -74,7 +74,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
                 <button class="btn" (click)="sync()" [disabled]="busy()"><app-icon name="sync" /> {{ busy() ? 'Sincronizando…' : 'Sincronizar ahora' }}</button>
                 <button class="btn ghost danger" (click)="disconnect()" [disabled]="busy()">Desconectar</button>
               </div>
-              <p class="muted small">Las tareas con fecha se crean como eventos en tu calendario principal. Los eventos de Google se muestran aquí en modo lectura.</p>
+              <p class="muted small">Las tareas con fecha se crean como eventos en tu calendario principal. Si allí mueves o renombras uno de esos eventos, la tarea se actualiza (tarda hasta 10 minutos, o al instante con «Sincronizar ahora»). El resto de tus eventos de Google se muestran aquí en modo lectura.</p>
             }
           } @else { <div class="skeleton" style="height:60px"></div> }
         </section>
@@ -186,7 +186,8 @@ export class CalendarComponent implements OnInit {
     if (!this.status()?.connected) { this.events.set([]); return; }
     const start = parseDay(this.gridStart()), end = parseDay(addDays(this.gridStart(), 42));
     this.api.calendarEvents(start.toISOString(), end.toISOString()).subscribe({
-      next: e => this.events.set(e),
+      // Al pedir los eventos el servidor trae también lo que se haya movido o renombrado en Google
+      next: e => { this.events.set(e); this.loadTasks(); },
       error: err => {
         this.toast.error(err, 'No se pudieron cargar los eventos de Google');
         if (err.status === 409) this.api.calendarStatus().subscribe(s => { this.status.set(s); this.events.set([]); });

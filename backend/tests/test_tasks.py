@@ -90,3 +90,10 @@ def test_stats_overview(client, auth):
     assert o["overdue"] == 0  # completada: ya no cuenta como atrasada
     assert len(o["timeline"]) == 7 and o["timeline"][-1]["created"] == 2 and o["timeline"][-1]["open"] == 1
     assert o["notes"] == 2 and o["top_tags"] == [{"tag": "x", "count": 1}]
+
+
+def test_due_date_with_offset_is_stored_in_utc(client, auth):
+    t = client.post(T, headers=auth, json={"title": "Con desfase", "all_day": False, "due_date": "2026-03-11T16:30:00+01:00"}).json()
+    assert t["due_date"].startswith("2026-03-11T15:30")
+    u = client.put(f"{T}/{t['id']}", headers=auth, json={"due_date": "2026-03-11T23:30:00-05:00"}).json()
+    assert u["due_date"].startswith("2026-03-12T04:30")

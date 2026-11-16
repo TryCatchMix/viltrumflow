@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -18,6 +18,13 @@ def _split(v):
     if isinstance(v, str):
         return [t for t in v.split(",") if t]
     return v or []
+
+
+def _to_utc(v):
+    """Fechas siempre en UTC: SQLite descarta el desfase y una hora «+01:00» se leería como si fuera UTC."""
+    if isinstance(v, datetime):
+        return v.replace(tzinfo=timezone.utc) if v.tzinfo is None else v.astimezone(timezone.utc)
+    return v
 
 
 def _strong_password(v: str) -> str:
@@ -157,6 +164,8 @@ class MemberOut(BaseModel):
 
 # ---------- Tareas ----------
 class TaskCreate(BaseModel):
+    _utc = field_validator("due_date")(_to_utc)
+
     title: str = Field(min_length=1, max_length=200)
     description: Optional[str] = None
     status: Status = Status.TODO
@@ -174,6 +183,8 @@ class TaskCreate(BaseModel):
 
 
 class TaskUpdate(BaseModel):
+    _utc = field_validator("due_date")(_to_utc)
+
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     status: Optional[Status] = None
@@ -353,6 +364,8 @@ class ChecklistToggle(BaseModel):
 
 
 class ChecklistConvert(BaseModel):
+    _utc = field_validator("due_date")(_to_utc)
+
     line: int = Field(ge=0)
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     due_date: Optional[datetime] = None

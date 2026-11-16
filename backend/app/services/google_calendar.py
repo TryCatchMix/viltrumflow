@@ -161,7 +161,8 @@ def _event_body(task: Task) -> dict:
     body = {
         "summary": ("✓ " if done else "") + task.title,
         "description": (task.description or "") + "\n\n— Creado desde ViltrumFlow",
-        "extendedProperties": {"private": {"viltrumflowTaskId": str(task.id)}},
+        # «viltrumflow=1» permite pedir a Google solo los eventos creados por la app
+        "extendedProperties": {"private": {"viltrumflowTaskId": str(task.id), "viltrumflow": "1"}},
     }
     if task.all_day:
         day = due.date()
@@ -191,6 +192,93 @@ def upsert_task_event(db: Session, acct: GoogleAccount, task: Task) -> None:
         raise GoogleError(f"No se pudo crear el evento ({r.status_code})")
     task.google_event_id = r.json()["id"]
     db.commit()
+
+
+PULL_INTERVAL = timedelta(minutes=10)
+
+
+def _parse_start(start: dict):
+    """(vencimiento, día completo) a partir del `start` de un evento, o None si no se entiende."""
+    try:
+        if "date" in start:
+            return datetime.fromisoformat(start["date"]).replace(tzinfo=timezone.utc), True
+        # A UTC: SQLite no guarda el desfase horario y «16:30+01:00» acabaría leyéndose como 16:30 UTC
+        return datetime.fromisoformat(start["dateTime"].replace("Z", "+00:00")).astimezone(timezone.utc), False
+    except (KeyError, ValueError):
+        return None
+
+
+def pull_changes(db: Session, acct: GoogleAccount, force: bool = False) -> int:
+    """
+    Trae a las tareas los cambios hechos en Google sobre sus eventos: fecha, hora y título.
+    Si el evento se borró allí, la tarea se conserva y simplemente deja de estar enlazada.
+    Devuelve cuántas tareas cambiaron. Sin `force` no consulta más de una vez cada 10 minutos.
+    """
+    now = datetime.now(timezone.utc)
+    last = acct.last_pull_at
+    if last and last.tzinfo is None:
+        last = last.replace(tzinfo=timezone.utc)
+    if not force and last and now - last < PULL_INTERVAL:
+        return 0
+    changed, page = 0, None
+    for _ in range(10):
+        params = {"privateExtendedProperty": "viltrumflow=1", "showDeleted": "true", "singleEvents": "true", "maxResults": 250}
+        if last:
+            params["updatedMin"] = (last - timedelta(minutes=2)).isoformat()  # margen por desfase de relojes
+        if page:
+            params["pageToken"] = page
+        r = _request(db, acct, "GET", _cal(acct), params=params)
+        if r.status_code == 410:  # Google ya no guarda cambios tan antiguos: se vuelve a empezar sin fecha
+            last, page = None, None
+            continue
+        if r.status_code != 200:
+            raise GoogleError(f"No se pudieron leer los cambios ({r.status_code})")
+        data = r.json()
+        for ev in data.get("items", []):
+            task_id = (ev.get("extendedProperties", {}).get("private", {}) or {}).get("viltrumflowTaskId")
+            task = db.get(Task, int(task_id)) if task_id and str(task_id).isdigit() else None
+            # Solo tareas del dueño de la cuenta que siguen enlazadas a ese mismo evento
+            if not task or task.user_id != acct.user_id or task.deleted_at is not None or task.google_event_id != ev.get("id"):
+                continue
+            if ev.get("status") == "cancelled":
+                task.google_event_id = None
+                changed += 1
+                continue
+            before = (task.title, task.due_date, task.all_day)
+            parsed = _parse_start(ev.get("start", {}))
+            if parsed:
+                due, all_day = parsed
+                current = task.due_date if task.due_date is None or task.due_date.tzinfo else task.due_date.replace(tzinfo=timezone.utc)
+                if current != due or task.all_day != all_day:
+                    task.due_date, task.all_day = due, all_day
+                    task.reminder_sent_at = task.reminder_emailed_at = None  # nueva fecha: el aviso vuelve a contar
+            title = (ev.get("summary") or "").removeprefix("✓ ").strip()
+            if title and title != task.title:
+                task.title = title[:200]
+            if (task.title, task.due_date, task.all_day) != before:
+                changed += 1
+        page = data.get("nextPageToken")
+        if not page:
+            break
+    acct.last_pull_at = now
+    db.commit()
+    return changed
+
+
+def pull_all(db: Session) -> None:
+    """Pasada del planificador: trae los cambios de todas las cuentas conectadas con sincronización activa."""
+    if not settings.google_configured:
+        return
+    for acct in db.query(GoogleAccount).filter(GoogleAccount.auto_sync.is_(True)).all():
+        try:
+            pull_changes(db, acct)
+        except GoogleAuthExpired:
+            db.rollback()
+            db.delete(acct)  # acceso revocado en Google: se desconecta, como en los endpoints
+            db.commit()
+        except (GoogleError, httpx.HTTPError) as exc:
+            db.rollback()
+            logger.warning("No se pudieron traer cambios de Google para el usuario %s: %s", acct.user_id, exc)
 
 
 def delete_event(db: Session, acct: GoogleAccount, event_id: str) -> None:

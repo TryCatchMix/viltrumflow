@@ -111,13 +111,18 @@ def events(
         end = end.replace(tzinfo=timezone.utc)
     if not timedelta(0) < end - start <= timedelta(days=100):
         raise HTTPException(400, "Rango de fechas no válido (máximo 100 días)")
-    return _guard(db, user, lambda: gcal.list_events(db, acct, start, end))
+    def run():
+        gcal.pull_changes(db, acct)  # primero, lo que se haya movido o renombrado en Google
+        return gcal.list_events(db, acct, start, end)
+
+    return _guard(db, user, run)
 
 
 @router.post("/sync", response_model=schemas.SyncResult)
 def sync(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Envía a Google Calendar todas las tareas con fecha (crea o actualiza sus eventos)."""
     acct = _account(user)
+    _guard(db, user, lambda: gcal.pull_changes(db, acct, force=True))  # antes de enviar: lo cambiado en Google manda
     tasks = db.query(Task).filter(
         Task.user_id == user.id, Task.parent_task_id.is_(None), Task.deleted_at.is_(None),
         Task.due_date.isnot(None), Task.status != Status.ARCHIVED,

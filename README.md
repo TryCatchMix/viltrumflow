@@ -91,6 +91,9 @@ Qué hace:
 - Muestra en el calendario los eventos de tu calendario principal (solo lectura).
 - Crea un evento por cada tarea con fecha y lo mantiene al día: cambios de título, fecha u hora,
   marca `✓` al completarla y lo elimina si borras la tarea o le quitas la fecha.
+- **En ambos sentidos**: si mueves de día u hora o renombras en Google el evento de una tarea, la tarea se
+  actualiza (cada 10 minutos, o al momento con «Sincronizar ahora»). Si borras el evento, la tarea se conserva y
+  deja de estar enlazada.
 - «Sincronizar ahora» envía las tareas que ya existían antes de conectar.
 - La sincronización automática se puede desactivar; «Desconectar» revoca el acceso.
 
