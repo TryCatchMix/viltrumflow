@@ -1,7 +1,8 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, Subject } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { Observable, Subject, of } from 'rxjs';
+import { map, tap } from 'rxjs/operators';
+import { Outbox, asNote, asTask } from './outbox';
 import { environment } from '../../environments/environment';
 import {
   CalendarEvent, CalendarStatus, ChecklistItem, Comment, Graph, ImportResult, Member, Note, NoteSummary, Overview, Project,
@@ -21,6 +22,7 @@ function params(q?: Query): HttpParams {
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private http = inject(HttpClient);
+  private outbox = inject(Outbox);
   readonly base = `${environment.apiUrl}/api/v1`;
 
   /** Se emite cuando cambian tareas o notas, para que las vistas abiertas se refresquen. */
@@ -30,15 +32,33 @@ export class ApiService {
   private n = <T>(o: Observable<T>) => o.pipe(tap(() => this.notesChanged.next()));
 
   // Tareas
-  tasks(q?: Query) { return this.http.get<Task[]>(`${this.base}/tasks`, { params: params(q) }); }
+  /** Incluye, al principio, las tareas creadas sin conexión que aún no se han enviado. */
+  tasks(q?: Query) {
+    return this.http.get<Task[]>(`${this.base}/tasks`, { params: params(q) }).pipe(
+      map(list => (q?.['note_id'] || q?.['assigned_to_me'] ? list : [...this.outbox.tasks().map(asTask), ...list])),
+    );
+  }
   task(id: number) { return this.http.get<Task>(`${this.base}/tasks/${id}`); }
-  createTask(data: TaskInput) { return this.t(this.http.post<Task>(`${this.base}/tasks`, data)); }
-  updateTask(id: number, data: TaskInput) { return this.t(this.http.put<Task>(`${this.base}/tasks/${id}`, data)); }
+  createTask(data: TaskInput) {
+    // Sin conexión, la tarea se guarda en el dispositivo y se envía al reconectar (las subtareas necesitan a su padre)
+    if (!navigator.onLine && !data.parent_task_id) return this.t(of(asTask(this.outbox.addTask(data))));
+    return this.t(this.postTask(data));
+  }
+  /** Envío real al servidor, sin pasar por la cola. */
+  postTask(data: TaskInput) { return this.http.post<Task>(`${this.base}/tasks`, data); }
+  updateTask(id: number, data: TaskInput) {
+    if (id < 0) return this.t(of(asTask(this.outbox.updateTask(id, data)!)));
+    return this.t(this.http.put<Task>(`${this.base}/tasks/${id}`, data));
+  }
   moveTask(id: number, status: Status, position: number) {
+    if (id < 0) return of(asTask(this.outbox.updateTask(id, { status })!));
     return this.http.patch<Task>(`${this.base}/tasks/${id}/move`, { status, position });
   }
-  deleteTask(id: number) { return this.t(this.http.delete<void>(`${this.base}/tasks/${id}`)); }
-  comments(taskId: number) { return this.http.get<Comment[]>(`${this.base}/tasks/${taskId}/comments`); }
+  deleteTask(id: number) {
+    if (id < 0) { this.outbox.removeTask(id); return this.t(of(undefined as void)); }
+    return this.t(this.http.delete<void>(`${this.base}/tasks/${id}`));
+  }
+  comments(taskId: number) { if (taskId < 0) return of([] as Comment[]); return this.http.get<Comment[]>(`${this.base}/tasks/${taskId}/comments`); }
   addComment(taskId: number, content: string) { return this.http.post<Comment>(`${this.base}/tasks/${taskId}/comments`, { content }); }
   deleteComment(taskId: number, id: number) { return this.http.delete<void>(`${this.base}/tasks/${taskId}/comments/${id}`); }
 
@@ -63,14 +83,33 @@ export class ApiService {
   emptyTrash() { return this.http.delete<void>(`${this.base}/trash`); }
 
   // Notas
-  notes(q?: Query) { return this.http.get<NoteSummary[]>(`${this.base}/notes`, { params: params(q) }); }
-  note(id: number) { return this.http.get<Note>(`${this.base}/notes/${id}`); }
+  notes(q?: Query) {
+    return this.http.get<NoteSummary[]>(`${this.base}/notes`, { params: params(q) }).pipe(
+      map(list => (q?.['q'] || q?.['tag'] ? list : [...this.outbox.notes().map(asNote), ...list])),
+    );
+  }
+  note(id: number): Observable<Note> {
+    if (id < 0) {
+      const p = this.outbox.notes().find(n => n.id === id);
+      return p ? of(asNote(p)) : this.http.get<Note>(`${this.base}/notes/0`);  // ya sincronizada o inexistente → 404
+    }
+    return this.http.get<Note>(`${this.base}/notes/${id}`);
+  }
+  /** Nota creada solo en el dispositivo, para cuando no hay conexión. */
+  createLocalNote(title: string, folder = ''): Note { const n = asNote(this.outbox.addNote(title, '', folder)); this.notesChanged.next(); return n; }
   noteByTitle(title: string) { return this.http.get<Note>(`${this.base}/notes/by-title/${encodeURIComponent(title)}`); }
   createNote(data: { title: string; content?: string; folder?: string }) { return this.n(this.http.post<Note>(`${this.base}/notes`, data)); }
   updateNote(id: number, data: Partial<Pick<Note, 'title' | 'content' | 'folder' | 'is_pinned'>>) {
+    if (id < 0) {
+      const { is_pinned, ...local } = data;
+      return this.n(of(asNote(this.outbox.updateNote(id, local)!)));
+    }
     return this.n(this.http.put<Note>(`${this.base}/notes/${id}`, data));
   }
-  deleteNote(id: number) { return this.n(this.http.delete<void>(`${this.base}/notes/${id}`)); }
+  deleteNote(id: number) {
+    if (id < 0) { this.outbox.removeNote(id); return this.n(of(undefined as void)); }
+    return this.n(this.http.delete<void>(`${this.base}/notes/${id}`));
+  }
   dailyNote(day: string) { return this.n(this.http.post<Note>(`${this.base}/notes/daily`, null, { params: params({ day }) })); }
   graph(includeTags: boolean) { return this.http.get<Graph>(`${this.base}/notes/graph`, { params: params({ include_tags: includeTags }) }); }
   tags() { return this.http.get<TagCount[]>(`${this.base}/notes/tags`); }

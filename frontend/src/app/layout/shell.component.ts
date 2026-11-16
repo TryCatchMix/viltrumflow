@@ -46,9 +46,9 @@ import { CommandPaletteComponent } from './command-palette.component';
     <main>
       @if (!offline.online()) {
         <div class="offline" role="status"><app-icon name="offline" [size]="14" />
-          Sin conexión. Puedes consultar lo que ya habías abierto y seguir escribiendo notas; se sincronizarán al volver.</div>
+          Sin conexión. Puedes consultar lo que ya habías abierto, escribir notas y crear tareas; se sincronizarán al volver.</div>
       } @else if (offline.pending()) {
-        <div class="offline sync" role="status"><app-icon name="sync" [size]="14" /> {{ offline.pending() }} nota(s) pendientes de sincronizar
+        <div class="offline sync" role="status"><app-icon name="sync" [size]="14" /> {{ offline.pending() }} cambio(s) pendientes de sincronizar
           <button class="btn sm" (click)="offline.sync()">Sincronizar</button></div>
       }
       @if (updateReady()) {

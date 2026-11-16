@@ -140,7 +140,10 @@ Disponible en la build de producción (no con `ng serve`) y servida por HTTPS o 
 - **Leer sin red**: la aplicación se abre y muestra las tareas, notas y proyectos que ya habías consultado con conexión.
 - **Escribir notas sin red**: los cambios se guardan en el dispositivo y se envían al reconectar. Si la nota cambió
   mientras tanto en otro sitio, no se sobrescribe: tu versión se guarda como «Título (copia sin conexión)».
-- **Lo demás necesita conexión**: crear o modificar tareas, proyectos o notas nuevas sin red muestra un aviso y no se guarda.
+- **Crear tareas y notas sin red**: se guardan en el dispositivo marcadas como «pendiente» (se pueden corregir o
+  borrar) y se envían al reconectar.
+- **Lo demás necesita conexión**: modificar tareas que ya existen, proyectos, comentarios o subir imágenes sin red
+  muestra un aviso y no se guarda.
 - Al cerrar sesión se borran del dispositivo los datos guardados para uso sin conexión.
 
 ## Importar y exportar notas

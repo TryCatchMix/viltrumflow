@@ -94,7 +94,10 @@ import { TaskDialogService } from './task-dialog.service';
        </fieldset>
       </form>
 
-      @if (task) {
+      @if (task?.pending) {
+        <p class="ro"><app-icon name="offline" [size]="14" /> Creada sin conexión. Se enviará al reconectar; entonces podrás añadirle subtareas y comentarios.</p>
+      }
+      @if (task && !task.pending) {
         <section>
           <h3>Subtareas @if (subtasks().length) { <span class="muted">{{ doneCount() }}/{{ subtasks().length }}</span> }</h3>
           @if (task.note_title) {

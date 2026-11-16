@@ -46,6 +46,8 @@ export interface Task {
   note_id?: number | null; google_event_id?: string | null; recurrence: Recurrence; reminder_minutes?: number | null;
   user_id: number; note_title?: string | null; owner_name: string; assignee_id?: number | null; assignee_name?: string | null; can_edit: boolean;
   created_at: string; updated_at: string; subtasks: Subtask[];
+  /** Creada sin conexión y aún no enviada al servidor (id negativo provisional). */
+  pending?: boolean;
 }
 export type TaskInput = Partial<Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'due_date' | 'all_day'
   | 'estimated_hours' | 'tags' | 'project_id' | 'parent_task_id' | 'note_id' | 'recurrence' | 'reminder_minutes' | 'assignee_id'>>;
@@ -54,6 +56,7 @@ export interface Comment { id: number; content: string; task_id: number; author_
 export interface NoteSummary {
   id: number; title: string; folder: string; tags: string[]; is_pinned: boolean; is_daily: boolean;
   created_at: string; updated_at: string; snippet?: string | null;
+  pending?: boolean;
 }
 export interface NoteRef { id: number | null; title: string; context?: string | null; }
 export interface Note extends NoteSummary { content: string; backlinks: NoteRef[]; outgoing: NoteRef[]; }

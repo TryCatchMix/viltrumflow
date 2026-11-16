@@ -37,7 +37,7 @@ import { TaskDialogService } from '../shared/task-dialog.service';
               <article class="card kcard" [attr.draggable]="t.can_edit" [class.dragging]="dragging()?.id === t.id" tabindex="0"
                        (dragstart)="onDragStart($event, t)" (dragend)="onDragEnd()"
                        (dragover)="onDragOver($event, col.status, i, true)" (click)="dialog.edit(t)" (keydown.enter)="dialog.edit(t)">
-                <p class="title">{{ t.title }}</p>
+                <p class="title">{{ t.title }} @if (t.pending) { <span class="chip" title="Creada sin conexión; se enviará al reconectar">pendiente</span> }</p>
                 <div class="meta row">
                   <span class="prio" [class]="t.priority">{{ prio[t.priority] }}</span>
                   @if (t.assignee_name) { <span class="chip" [title]="'Responsable: ' + t.assignee_name"><app-icon name="users" [size]="11" />{{ t.assignee_name }}</span> }

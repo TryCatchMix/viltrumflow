@@ -54,6 +54,7 @@ type Mode = 'edit' | 'split' | 'preview';
                 <a class="item row" [class.nested]="f.name" [routerLink]="['/notes', n.id]" [class.active]="n.id === note()?.id" (click)="listOpen.set(false)">
                   @if (n.is_pinned) { <app-icon name="pin" [size]="12" /> }
                   <span class="truncate">{{ n.title }}</span>
+                  @if (n.pending) { <span class="chip" title="Creada sin conexión; se enviará al reconectar">pendiente</span> }
                 </a>
               }
             }
@@ -261,11 +262,15 @@ export class NotesComponent implements OnDestroy {
 
   constructor() {
     this.loadList(true);
+    this.offline.noteSynced.pipe(takeUntilDestroyed()).subscribe(({ temp, real }) => {
+      this.loadList();
+      if (this.note()?.id === temp) this.router.navigate(['/notes', real], { replaceUrl: true });
+    });
     this.api.tasksChanged.pipe(takeUntilDestroyed()).subscribe(() => { const n = this.note(); if (n) this.loadLinked(n.id); });
     addEventListener('online', this.onOnline);
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe(p => {
       const id = Number(p.get('id'));
-      if (id) this.open(id);
+      if (id) this.open(id);  // los ids negativos son notas creadas sin conexión
     });
     this.search$.pipe(debounceTime(200), distinctUntilChanged(), switchMap(q => (q ? this.api.notes({ q }) : of([]))), takeUntilDestroyed())
       .subscribe(r => this.results.set(r));
@@ -418,6 +423,14 @@ export class NotesComponent implements OnDestroy {
     const base = title ?? 'Sin título';
     let name = base, i = 1;
     while (this.titleSet().has(name.toLowerCase())) name = `${base} ${++i}`;
+    if (!navigator.onLine) {
+      // Sin red: la nota vive en el dispositivo hasta que se pueda enviar
+      const local = this.api.createLocalNote(name, title ? '' : this.note()?.folder ?? '');
+      this.listOpen.set(false);
+      this.loadList();
+      this.router.navigate(['/notes', local.id], { queryParams: { edit: 1 } });
+      return;
+    }
     this.api.createNote({ title: name, content: '', folder: title ? '' : this.note()?.folder ?? '' }).subscribe({
       next: n => { this.listOpen.set(false); this.loadList(); this.router.navigate(['/notes', n.id], { queryParams: { edit: 1 } }); },
       error: e => this.toast.error(e, 'No se pudo crear la nota'),
