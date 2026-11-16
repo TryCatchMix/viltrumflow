@@ -62,6 +62,18 @@ export function relativeTime(iso: string): string {
   return DAY_FMT_Y.format(new Date(iso));
 }
 
+/** Duración legible: «1 h 25 min», «40 min», «35 s». */
+export function formatDuration(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  if (s < 60) return `${s} s`;
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h ? `${h} h${m ? ` ${m} min` : ''}` : `${m} min`;
+}
+/** Segundos registrados en una tarea, contando el cronómetro si está en marcha. */
+export function spentSeconds(t: { time_spent_seconds: number; timer_started_at?: string | null }, now = Date.now()): number {
+  return t.time_spent_seconds + (t.timer_started_at ? Math.max(0, (now - new Date(t.timer_started_at).getTime()) / 1000) : 0);
+}
+
 /** ¿Falló por falta de red (y no por una respuesta del servidor)? */
 export function isOffline(err: unknown): boolean {
   return err instanceof HttpErrorResponse && (err.status === 0 || err.status === 504);

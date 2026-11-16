@@ -2,16 +2,18 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../core/api.service';
-import { CalendarEvent, CalendarStatus, Task } from '../core/models';
+import { CalendarEvent, CalendarInfo, CalendarStatus, Task } from '../core/models';
 import { ToastService } from '../core/toast.service';
-import { addDays, parseDay, taskDay, taskTime, today, ymd } from '../core/util';
+import { addDays, parseDay, taskDay, taskTime, toDue, today, ymd } from '../core/util';
 import { IconComponent } from '../shared/icon.component';
 import { TaskDialogService } from '../shared/task-dialog.service';
 
 interface Entry { key: string; title: string; time: string; kind: 'task' | 'google'; done?: boolean; task?: Task; event?: CalendarEvent; }
 const MONTH = new Intl.DateTimeFormat('es', { month: 'long', year: 'numeric' });
 const LONG = new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long' });
+const SHORT_MONTH = new Intl.DateTimeFormat('es', { month: 'short' });
 const pad = (n: number) => String(n).padStart(2, '0');
+const mondayOf = (day: string) => addDays(day, -((parseDay(day).getDay() + 6) % 7));
 
 @Component({
   selector: 'app-calendar',
@@ -22,27 +24,33 @@ const pad = (n: number) => String(n).padStart(2, '0');
     <div class="page-head">
       <h1 class="month">{{ monthLabel() }}</h1>
       <div class="row">
-        <button class="btn icon" (click)="shift(-1)" aria-label="Mes anterior"><app-icon name="left" /></button>
+        <button class="btn icon" (click)="shift(-1)" [attr.aria-label]="view() === 'month' ? 'Mes anterior' : 'Semana anterior'"><app-icon name="left" /></button>
         <button class="btn" (click)="goToday()">Hoy</button>
-        <button class="btn icon" (click)="shift(1)" aria-label="Mes siguiente"><app-icon name="right" /></button>
+        <button class="btn icon" (click)="shift(1)" [attr.aria-label]="view() === 'month' ? 'Mes siguiente' : 'Semana siguiente'"><app-icon name="right" /></button>
+      </div>
+      <div class="row" role="group" aria-label="Vista">
+        <button class="btn sm" [class.active]="view() === 'month'" (click)="setView('month')">Mes</button>
+        <button class="btn sm" [class.active]="view() === 'week'" (click)="setView('week')">Semana</button>
       </div>
       <span class="spacer"></span>
       <div class="legend row"><span><i class="task"></i> Tarea</span><span><i class="google"></i> Google Calendar</span></div>
     </div>
 
     <div class="layout">
-      <div class="card grid" role="grid" [attr.aria-label]="monthLabel()">
+      <div class="card grid" [class.week]="view() === 'week'" role="grid" [attr.aria-label]="monthLabel()">
         @for (d of weekdays; track d) { <div class="wd" role="columnheader">{{ d }}</div> }
         @for (c of cells(); track c.day) {
-          <div class="cell" role="gridcell" [class.out]="!c.inMonth" [class.today]="c.day === todayStr" [class.sel]="c.day === selected()"
+          <div class="cell" role="gridcell" [class.out]="!c.inMonth" [class.today]="c.day === todayStr" [class.sel]="c.day === selected()" [class.drop]="dropDay() === c.day"
+               (dragover)="onDragOver($event, c.day)" (dragleave)="dropDay.set(null)" (drop)="onDrop($event, c.day)"
                (click)="selected.set(c.day)" (dblclick)="newTask(c.day)" tabindex="0" (keydown.enter)="selected.set(c.day)" [attr.aria-label]="c.aria">
             <span class="num">{{ c.num }}</span>
-            @for (e of c.entries.slice(0, 3); track e.key) {
-              <button class="ev" [class]="e.kind" [class.done]="e.done" [title]="e.title" (click)="openEntry(e, $event)">
+            @for (e of (view() === 'week' ? c.entries : c.entries.slice(0, 3)); track e.key) {
+              <button class="ev" [class]="e.kind" [class.done]="e.done" [title]="e.title + (movable(e) ? ' — arrástrala a otro día para cambiar la fecha' : '')"
+                      [attr.draggable]="movable(e)" (dragstart)="onDragStart($event, e)" (dragend)="dragging = null; dropDay.set(null)" (click)="openEntry(e, $event)">
                 @if (e.time) { <b>{{ e.time }}</b> }{{ e.title }}
               </button>
             }
-            @if (c.entries.length > 3) { <span class="more">+{{ c.entries.length - 3 }} más</span> }
+            @if (view() === 'month' && c.entries.length > 3) { <span class="more">+{{ c.entries.length - 3 }} más</span> }
           </div>
         }
       </div>
@@ -70,6 +78,13 @@ const pad = (n: number) => String(n).padStart(2, '0');
             } @else {
               <p><span class="ok"></span> Conectado como <strong>{{ s.email || 'tu cuenta de Google' }}</strong></p>
               <label class="row"><input type="checkbox" [checked]="s.auto_sync" (change)="setAuto($any($event.target).checked)" /> Sincronizar tareas automáticamente</label>
+              @if (calendars().length > 1) {
+                <label class="field">Calendario para las tareas
+                  <select class="input" [value]="currentCalendar()" (change)="setCalendar($any($event.target).value)" [disabled]="busy()">
+                    @for (c of calendars(); track c.id) { <option [value]="c.id" [selected]="c.id === currentCalendar()">{{ c.name }}{{ c.primary ? ' (principal)' : '' }}</option> }
+                  </select>
+                </label>
+              } @else if (calendarsError()) { <p class="muted small">{{ calendarsError() }}</p> }
               <div class="row wrap">
                 <button class="btn" (click)="sync()" [disabled]="busy()"><app-icon name="sync" /> {{ busy() ? 'Sincronizando…' : 'Sincronizar ahora' }}</button>
                 <button class="btn ghost danger" (click)="disconnect()" [disabled]="busy()">Desconectar</button>
@@ -90,6 +105,8 @@ const pad = (n: number) => String(n).padStart(2, '0');
     .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; }
     .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); overflow: hidden; }
     .wd { padding: 8px 10px; font-size: 12px; font-weight: 500; color: var(--text-3); border-bottom: 1px solid var(--border); }
+    .grid.week .cell { min-height: 420px; } .cell.drop { background: var(--accent-soft); }
+    .ev[draggable=true] { cursor: grab; }
     .cell { min-height: 108px; padding: 6px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 3px; cursor: pointer; min-width: 0;
       &:nth-child(7n) { border-right: none; } &:hover { background: var(--surface-2); } &.out .num { color: var(--text-3); opacity: .6; }
       &.sel { box-shadow: inset 0 0 0 2px var(--accent); } &.today .num { background: var(--accent); color: var(--on-accent); } }
@@ -119,17 +136,33 @@ export class CalendarComponent implements OnInit {
   weekdays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   todayStr = today();
   month = signal(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  view = signal<'month' | 'week'>(localStorage.getItem('vf-cal-view') === 'week' ? 'week' : 'month');
+  /** Lunes de la semana mostrada en la vista semanal. */
+  weekStart = signal(mondayOf(today()));
+  calendars = signal<CalendarInfo[]>([]);
+  calendarsError = signal('');
+  dropDay = signal<string | null>(null);
+  dragging: Task | null = null;
+  currentCalendar = computed(() => {
+    const id = this.status()?.calendar_id ?? 'primary';
+    return id === 'primary' ? this.calendars().find(c => c.primary)?.id ?? id : id;
+  });
   selected = signal(today());
   tasks = signal<Task[]>([]);
   events = signal<CalendarEvent[]>([]);
   status = signal<CalendarStatus | null>(null);
   busy = signal(false);
 
-  monthLabel = computed(() => MONTH.format(this.month()));
+  monthLabel = computed(() => {
+    if (this.view() === 'month') return MONTH.format(this.month());
+    const a = parseDay(this.weekStart()), b = parseDay(addDays(this.weekStart(), 6));
+    return `${a.getDate()}${a.getMonth() === b.getMonth() ? '' : ' ' + SHORT_MONTH.format(a)} – ${b.getDate()} ${SHORT_MONTH.format(b)} ${b.getFullYear()}`;
+  });
   selectedLabel = computed(() => LONG.format(parseDay(this.selected())));
 
   /** Primer día visible: el lunes de la semana en que empieza el mes. */
   private gridStart = computed(() => {
+    if (this.view() === 'week') return this.weekStart();
     const m = this.month();
     return addDays(ymd(m), -((m.getDay() + 6) % 7));
   });
@@ -159,10 +192,10 @@ export class CalendarComponent implements OnInit {
   });
 
   cells = computed(() => {
-    const start = this.gridStart(), m = this.month().getMonth(), by = this.byDay();
-    return Array.from({ length: 42 }, (_, i) => {
+    const start = this.gridStart(), week = this.view() === 'week', m = this.month().getMonth(), by = this.byDay();
+    return Array.from({ length: week ? 7 : 42 }, (_, i) => {
       const day = addDays(start, i), date = parseDay(day), entries = by.get(day) ?? [];
-      return { day, num: date.getDate(), inMonth: date.getMonth() === m, entries, aria: `${LONG.format(date)}, ${entries.length} elementos` };
+      return { day, num: date.getDate(), inMonth: week || date.getMonth() === m, entries, aria: `${LONG.format(date)}, ${entries.length} elementos` };
     });
   });
   selectedEntries = computed(() => this.byDay().get(this.selected()) ?? []);
@@ -178,13 +211,13 @@ export class CalendarComponent implements OnInit {
       this.router.navigate([], { queryParams: {}, replaceUrl: true });
     }
     this.loadTasks();
-    this.api.calendarStatus().subscribe({ next: s => { this.status.set(s); this.loadEvents(); }, error: e => this.toast.error(e) });
+    this.api.calendarStatus().subscribe({ next: s => { this.status.set(s); this.loadEvents(); if (s.connected) this.loadCalendars(); }, error: e => this.toast.error(e) });
   }
 
   private loadTasks() { this.api.tasks().subscribe({ next: t => this.tasks.set(t), error: e => this.toast.error(e) }); }
   private loadEvents() {
     if (!this.status()?.connected) { this.events.set([]); return; }
-    const start = parseDay(this.gridStart()), end = parseDay(addDays(this.gridStart(), 42));
+    const start = parseDay(this.gridStart()), end = parseDay(addDays(this.gridStart(), this.view() === 'week' ? 7 : 42));
     this.api.calendarEvents(start.toISOString(), end.toISOString()).subscribe({
       // Al pedir los eventos el servidor trae también lo que se haya movido o renombrado en Google
       next: e => { this.events.set(e); this.loadTasks(); },
@@ -195,8 +228,49 @@ export class CalendarComponent implements OnInit {
     });
   }
 
-  shift(n: number) { const m = this.month(); this.month.set(new Date(m.getFullYear(), m.getMonth() + n, 1)); this.loadEvents(); }
-  goToday() { const d = new Date(); this.month.set(new Date(d.getFullYear(), d.getMonth(), 1)); this.selected.set(today()); this.loadEvents(); }
+  shift(n: number) {
+    if (this.view() === 'week') this.weekStart.set(addDays(this.weekStart(), 7 * n));
+    else { const m = this.month(); this.month.set(new Date(m.getFullYear(), m.getMonth() + n, 1)); }
+    this.loadEvents();
+  }
+  goToday() {
+    const d = new Date();
+    this.month.set(new Date(d.getFullYear(), d.getMonth(), 1));
+    this.weekStart.set(mondayOf(today()));
+    this.selected.set(today());
+    this.loadEvents();
+  }
+  setView(v: 'month' | 'week') {
+    if (v === 'week') this.weekStart.set(mondayOf(this.selected()));  // la semana del día seleccionado
+    else { const d = parseDay(this.weekStart()); this.month.set(new Date(d.getFullYear(), d.getMonth(), 1)); }
+    this.view.set(v);
+    localStorage.setItem('vf-cal-view', v);
+    this.loadEvents();
+  }
+
+  // ---- Arrastrar una tarea a otro día ----
+  movable(e: Entry) { return !!e.task && e.task.can_edit && !e.task.pending; }
+  onDragStart(ev: DragEvent, e: Entry) {
+    if (!this.movable(e)) { ev.preventDefault(); return; }
+    this.dragging = e.task!;
+    ev.dataTransfer?.setData('text/plain', String(e.task!.id));
+    if (ev.dataTransfer) ev.dataTransfer.effectAllowed = 'move';
+  }
+  onDragOver(ev: DragEvent, day: string) {
+    if (!this.dragging) return;
+    ev.preventDefault();
+    if (this.dropDay() !== day) this.dropDay.set(day);
+  }
+  onDrop(ev: DragEvent, day: string) {
+    ev.preventDefault();
+    const t = this.dragging;
+    this.dragging = null;
+    this.dropDay.set(null);
+    if (!t || taskDay(t) === day) return;
+    const due = toDue(day, taskTime(t));  // conserva la hora si la tenía
+    this.tasks.update(l => l.map(x => (x.id === t.id ? { ...x, ...due } : x)));  // optimista
+    this.api.updateTask(t.id, due).subscribe({ error: e => { this.toast.error(e, 'No se pudo cambiar la fecha'); this.loadTasks(); } });
+  }
   newTask(day: string) { this.dialog.create({ day }); }
   openEntry(e: Entry, ev: Event) {
     ev.stopPropagation();
@@ -215,7 +289,21 @@ export class CalendarComponent implements OnInit {
       error: e => { this.busy.set(false); this.toast.error(e); this.api.calendarStatus().subscribe(s => this.status.set(s)); },
     });
   }
-  setAuto(on: boolean) { this.api.calendarSettings(on).subscribe({ next: s => this.status.set(s), error: e => this.toast.error(e) }); }
+  setAuto(on: boolean) { this.api.calendarSettings({ auto_sync: on }).subscribe({ next: s => this.status.set(s), error: e => this.toast.error(e) }); }
+  private loadCalendars() {
+    this.api.calendars().subscribe({
+      next: c => { this.calendars.set(c); this.calendarsError.set(''); },
+      error: () => this.calendarsError.set('Para elegir otro calendario, desconecta y vuelve a conectar (hace falta un permiso nuevo).'),
+    });
+  }
+  setCalendar(id: string) {
+    if (id === this.currentCalendar()) return;
+    this.busy.set(true);
+    this.api.calendarSettings({ calendar_id: id }).subscribe({
+      next: s => { this.status.set(s); this.sync(); },  // mueve los eventos de las tareas al calendario elegido
+      error: e => { this.busy.set(false); this.toast.error(e); },
+    });
+  }
   disconnect() {
     if (!confirm('¿Desconectar Google Calendar? Los eventos ya creados en Google se conservan.')) return;
     this.api.calendarDisconnect().subscribe({

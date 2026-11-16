@@ -12,8 +12,12 @@ notas Markdown con `[[enlaces]]` al estilo Obsidian, vista de grafo y panel con 
 | **Notas** | Editor Markdown con resaltado, modos edición / dividido / lectura, autoguardado, carpetas, notas fijadas, nota diaria |
 | **Imágenes** | Pega, arrastra o elige una imagen en el editor (PNG, JPEG, GIF, WebP; 5 MB); son privadas y viajan en la exportación e importación |
 | **Enlaces** | `[[Nota]]`, `[[Nota\|alias]]`, autocompletado al escribir `[[`, enlaces entrantes con contexto, creación de la nota al abrir un enlace sin resolver, renombrar una nota actualiza los enlaces que apuntan a ella |
+| **Secciones e incrustaciones** | `[[Nota#Sección]]` abre la nota en ese encabezado; `![[Nota]]` y `![[Nota#Sección]]` muestran su contenido dentro de otra |
+| **Menciones sin enlazar** | Detecta las notas que nombran a la actual sin enlazarla y las convierte en enlace con un clic |
+| **Plantillas** | Las notas de la carpeta `Plantillas` sirven de modelo (`{{title}}`, `{{date}}`, `{{time}}`); la plantilla «Diario» se usa para la nota diaria |
+| **Historial** | Versiones anteriores de cada nota, con vista previa y restauración |
 | **Etiquetas** | `#etiqueta` y anidadas `#proyecto/web`, filtro por etiqueta |
-| **Grafo** | Notas, enlaces, notas sin crear y (opcional) etiquetas; zoom, arrastre, resaltado de vecinos y búsqueda |
+| **Grafo** | Notas, enlaces, notas sin crear y (opcional) etiquetas; zoom, arrastre, resaltado de vecinos y búsqueda. Cada nota muestra además su grafo local |
 | **Captura rápida** | «Llamar a Juan mañana a las 10 #trabajo !alta @web cada semana» rellena fecha, hora, etiquetas, prioridad, proyecto y repetición |
 | **Tareas** | Alta rápida, subtareas, comentarios, prioridad, etiquetas, fecha con o sin hora, filtros y agrupación |
 | **Recurrentes** | Cada día, días laborables, cada semana, cada 2 semanas, cada mes o cada año: al completar una tarea se crea la siguiente |
@@ -21,7 +25,8 @@ notas Markdown con `[[enlaces]]` al estilo Obsidian, vista de grafo y panel con 
 | **Importar / exportar** | Todas las notas como `.zip` de archivos `.md` (se abre como vault en Obsidian) e importación de un vault o de `.md` sueltos |
 | **Casillas de notas** | Los `- [ ]` escritos en cualquier nota aparecen en *Tareas → Casillas de notas*, se marcan desde ahí y se pueden convertir en tareas enlazadas a la nota |
 | **Tablero** | Kanban con arrastrar y soltar; el orden se guarda |
-| **Calendario** | Vista mensual con tareas y eventos de Google Calendar |
+| **Calendario** | Vistas de mes y semana con tareas y eventos de Google Calendar; arrastra una tarea a otro día para cambiar su fecha |
+| **Tiempo** | Cronómetro por tarea, corrección manual y comparación con la estimación en el panel |
 | **Panel** | Actividad diaria, carga pendiente, reparto por estado / prioridad y avance por proyecto |
 | **Proyectos compartidos** | Invita a otros usuarios como editores o con solo lectura, asigna tareas a un responsable y recibe aviso cuando te asignan una |
 | **Papelera** | Las notas y tareas eliminadas se pueden restaurar durante 30 días |
@@ -97,7 +102,10 @@ Qué hace:
 - «Sincronizar ahora» envía las tareas que ya existían antes de conectar.
 - La sincronización automática se puede desactivar; «Desconectar» revoca el acceso.
 
-Permisos solicitados: `calendar.events` y el email de la cuenta. Los tokens se guardan cifrados.
+- Puedes elegir en qué calendario se crean los eventos de las tareas (por defecto, el principal).
+
+Permisos solicitados: `calendar.events`, la lista de tus calendarios (solo lectura) y el email de la cuenta.
+Si conectaste la cuenta antes de existir la elección de calendario, desconecta y vuelve a conectar para concederlo. Los tokens se guardan cifrados.
 
 ## Recordatorios y email
 

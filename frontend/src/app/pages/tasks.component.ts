@@ -84,6 +84,7 @@ type Due = '' | 'overdue' | 'today' | 'week' | 'none';
               <div class="task row" [class.done]="t.status === 'completed'" (click)="dialog.edit(t)" tabindex="0" (keydown.enter)="dialog.edit(t)">
                 <input type="checkbox" class="check" [checked]="t.status === 'completed'" [disabled]="!t.can_edit" (click)="$event.stopPropagation()" (change)="toggle(t)" [attr.aria-label]="'Completar ' + t.title" />
                 <span class="title truncate">{{ t.title }}</span>
+                @if (t.timer_started_at) { <span class="chip tag" title="Cronómetro en marcha"><app-icon name="clock" [size]="11" />en curso</span> }
                 @if (t.pending) { <span class="chip" title="Creada sin conexión; se enviará al reconectar"><app-icon name="offline" [size]="11" />pendiente</span> }
                 @if (t.recurrence !== 'none') { <span class="chip" [title]="'Se repite: ' + rec[t.recurrence]"><app-icon name="repeat" [size]="11" /></span> }
                 @if (t.reminder_minutes !== null && t.reminder_minutes !== undefined) { <span class="chip" title="Con recordatorio"><app-icon name="bell" [size]="11" /></span> }

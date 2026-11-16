@@ -9,7 +9,21 @@ HEX = r"^#[0-9A-Fa-f]{6}$"
 Recurrence = Literal["none", "daily", "weekdays", "weekly", "biweekly", "monthly", "yearly"]
 
 
-class ORM(BaseModel):
+class Out(BaseModel):
+    """
+    Base de los modelos de respuesta. SQLite devuelve las fechas sin zona horaria; si salieran así,
+    el navegador las interpretaría como hora local. Aquí se marcan siempre como UTC.
+    """
+
+    @field_validator("*", mode="after")
+    @classmethod
+    def _aware(cls, v):
+        if isinstance(v, datetime) and v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
+
+
+class ORM(Out):
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -344,7 +358,7 @@ class NoteVersionDetail(NoteVersionOut):
     content: str
 
 
-class MentionOut(BaseModel):
+class MentionOut(Out):
     note_id: int
     title: str
     context: str
@@ -415,7 +429,7 @@ class ImportResult(BaseModel):
 
 
 # ---------- Recordatorios ----------
-class ReminderOut(BaseModel):
+class ReminderOut(Out):
     kind: Literal["reminder", "assigned"] = "reminder"
     task_id: int
     title: str
@@ -425,7 +439,7 @@ class ReminderOut(BaseModel):
 
 
 # ---------- Papelera ----------
-class TrashItem(BaseModel):
+class TrashItem(Out):
     kind: Literal["note", "task"]
     id: int
     title: str

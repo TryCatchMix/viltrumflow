@@ -6,7 +6,7 @@ import { Subject, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs
 import { ApiService } from '../core/api.service';
 import { AttachmentService } from '../core/attachment.service';
 import { OfflineService } from '../core/offline.service';
-import { Note, NoteSummary, TagCount, Task } from '../core/models';
+import { Mention, Note, NoteSummary, NoteVersion, TagCount, Task } from '../core/models';
 import { TaskDialogService } from '../shared/task-dialog.service';
 import { ToastService } from '../core/toast.service';
 import { isOffline, relativeTime, today } from '../core/util';
@@ -28,8 +28,19 @@ type Mode = 'edit' | 'split' | 'preview';
       <div class="row top">
         <input class="input" [ngModel]="query()" (ngModelChange)="onSearch($event)" placeholder="Buscar en notas…" aria-label="Buscar en notas" />
         <button class="btn icon" title="Nueva nota" (click)="create()"><app-icon name="plus" /></button>
+        <button class="btn icon" title="Nueva nota desde plantilla" [class.active]="tplOpen()" (click)="tplOpen.set(!tplOpen())"><app-icon name="template" /></button>
         <button class="btn icon" title="Nota diaria de hoy" (click)="daily()"><app-icon name="calendar" /></button>
       </div>
+      @if (tplOpen()) {
+        <div class="tpl">
+          @for (t of templates(); track t.id) {
+            <button class="out row" (click)="createFromTemplate(t)"><app-icon name="template" [size]="13" /><span class="truncate">{{ t.title }}</span></button>
+          } @empty {
+            <p class="muted">Las notas de la carpeta <strong>Plantillas</strong> sirven de modelo. Admiten <code>{{ '{' + '{title}' + '}' }}</code>, <code>{{ '{' + '{date}' + '}' }}</code> y <code>{{ '{' + '{time}' + '}' }}</code>.</p>
+            <button class="btn sm" (click)="seedTemplates()">Crear plantillas de ejemplo</button>
+          }
+        </div>
+      }
       @if (tag()) {
         <div class="row filter"><span class="chip tag">#{{ tag() }}</span><span class="muted">{{ visible().length }} notas</span><span class="spacer"></span>
           <button class="btn ghost icon sm" title="Quitar filtro" (click)="tag.set('')"><app-icon name="x" [size]="13" /></button></div>
@@ -86,6 +97,7 @@ type Mode = 'edit' | 'split' | 'preview';
           </div>
           <input #image type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden (change)="pickImages(image)" />
           <button class="btn ghost icon sm" title="Insertar imagen (también puedes pegarla o arrastrarla)" (click)="image.click()"><app-icon name="image" /></button>
+          @if (n.id > 0) { <button class="btn ghost icon sm" title="Historial de versiones" (click)="openHistory()"><app-icon name="history" /></button> }
           <button class="btn ghost icon sm" [class.active]="n.is_pinned" [title]="n.is_pinned ? 'Desfijar' : 'Fijar'" (click)="pin()"><app-icon name="pin" /></button>
           <button class="btn ghost icon sm hide-narrow" [class.active]="side()" title="Panel de enlaces" (click)="toggleSide()"><app-icon name="panel" /></button>
           <button class="btn ghost icon sm danger" title="Eliminar nota" (click)="remove()"><app-icon name="trash" /></button>
@@ -123,6 +135,22 @@ type Mode = 'edit' | 'split' | 'preview';
     <!-- Panel derecho -->
     @if (note(); as n) {
       <aside class="side">
+        @if (neighbors().length) {
+          <h4>Grafo local</h4>
+          <svg class="local" viewBox="0 0 240 190" role="img" [attr.aria-label]="'Notas conectadas con ' + n.title">
+            @for (p of neighbors(); track p.title) { <line x1="120" y1="95" [attr.x2]="p.x" [attr.y2]="p.y" /> }
+            @for (p of neighbors(); track p.title) {
+              <g class="node" [class.ghost]="!p.id" (click)="openLink(p.title)" tabindex="0" (keydown.enter)="openLink(p.title)" role="link">
+                <title>{{ p.title }}</title>
+                <circle class="hit" [attr.cx]="p.x" [attr.cy]="p.y" r="15" />
+                <circle [attr.cx]="p.x" [attr.cy]="p.y" r="5" />
+                <text [attr.x]="p.x" [attr.y]="p.y + (p.y < 95 ? -9 : 17)" text-anchor="middle">{{ p.label }}</text>
+              </g>
+            }
+            <circle class="center" cx="120" cy="95" r="7" />
+          </svg>
+        }
+
         <h4>Enlaces entrantes <span class="muted">{{ n.backlinks.length }}</span></h4>
         @for (b of n.backlinks; track b.id) {
           <a class="back" [routerLink]="['/notes', b.id]"><strong>{{ b.title }}</strong>@if (b.context) { <small>{{ b.context }}</small> }</a>
@@ -134,6 +162,17 @@ type Mode = 'edit' | 'split' | 'preview';
             <app-icon [name]="o.id ? 'note' : 'plus'" [size]="13" /><span class="truncate">{{ o.title }}</span>
           </button>
         } @empty { <p class="muted">Sin enlaces. Escribe <code>[[</code> para crear uno.</p> }
+
+        @if (mentions().length) {
+          <h4>Menciones sin enlazar <span class="muted">{{ mentions().length }}</span></h4>
+          @for (m of mentions(); track m.note_id) {
+            <div class="back mention">
+              <div class="row"><a [routerLink]="['/notes', m.note_id]"><strong>{{ m.title }}</strong></a><span class="spacer"></span>
+                <button class="btn sm" [title]="'Convertir la mención en un enlace a ' + n.title" (click)="linkMention(m)"><app-icon name="link" [size]="12" /> Enlazar</button></div>
+              <small>{{ m.context }}</small>
+            </div>
+          }
+        }
 
         @if (linked().length) {
           <h4>Tareas de esta nota <span class="muted">{{ linked().length }}</span></h4>
@@ -151,9 +190,48 @@ type Mode = 'edit' | 'split' | 'preview';
         <a class="btn sm graph-link" [routerLink]="['/graph']" [queryParams]="{ focus: n.id }"><app-icon name="graph" [size]="14" /> Ver en el grafo</a>
       </aside>
     }
-  </div>`,
+  </div>
+
+  @if (history(); as h) {
+    <div class="backdrop" (click)="history.set(null)">
+      <div class="modal hist" role="dialog" aria-label="Historial de versiones" (click)="$event.stopPropagation()">
+        <div class="row"><h2>Historial de «{{ note()?.title }}»</h2><span class="spacer"></span>
+          <button class="btn ghost icon" title="Cerrar" (click)="history.set(null)"><app-icon name="x" /></button></div>
+        @if (h.length) {
+          <div class="hgrid">
+            <ul>
+              @for (v of h; track v.id) {
+                <li><button [class.active]="selected()?.id === v.id" (click)="selectVersion(v)">
+                  <strong>{{ when(v.created_at) }}</strong><small class="muted truncate">{{ v.preview || '(vacía)' }}</small></button></li>
+              }
+            </ul>
+            <div class="hview">
+              @if (selected()?.content !== undefined) { <app-markdown [content]="selected()!.content!" [titles]="titleSet()" [embeds]="false" /> }
+            </div>
+          </div>
+          <div class="actions"><span class="muted small">Se guarda una versión como mucho cada 10 minutos, y las 50 más recientes.</span><span class="spacer"></span>
+            <button class="btn primary" [disabled]="!selected()" (click)="restoreVersion()"><app-icon name="undo" /> Restaurar esta versión</button></div>
+        } @else {
+          <p class="muted">Todavía no hay versiones anteriores. Aparecerán aquí a medida que edites la nota.</p>
+        }
+      </div>
+    </div>
+  }`,
   styles: [`
     :host { display: block; height: 100%; min-height: 0; }
+    .tpl { padding: 0 10px 8px; display: grid; gap: 4px; font-size: 13px; border-bottom: 1px solid var(--border); margin-bottom: 6px; p { padding-bottom: 4px; } }
+    .local { width: 100%; height: auto; line { stroke: var(--border); stroke-width: 1; } text { font-size: 9.5px; fill: var(--text-2); }
+      circle { fill: var(--text-2); } .center { fill: var(--accent); } circle.hit { fill: transparent !important; stroke: none !important; }
+      .node { cursor: pointer; &:hover circle, &:focus-visible circle { fill: var(--accent); } &:hover text { fill: var(--text); }
+        &.ghost circle { fill: none; stroke: var(--text-3); stroke-dasharray: 2 2; } } }
+    .mention { cursor: default; a { color: var(--text); } }
+    .hist { max-width: 860px; } .small { font-size: 12px; }
+    .hgrid { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 12px; height: min(56vh, 520px);
+      ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: grid; gap: 2px; align-content: start; }
+      button { width: 100%; display: grid; gap: 1px; text-align: left; background: none; border: none; padding: 7px 9px; border-radius: var(--radius-sm); font-size: 13px;
+        &:hover { background: var(--surface-2); } &.active { background: var(--accent-soft); } small { font-size: 12px; } } }
+    .hview { overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px 18px; background: var(--bg); }
+    @media (max-width: 700px) { .hgrid { grid-template-columns: minmax(0, 1fr); height: auto; ul { max-height: 160px; } .hview { max-height: 40vh; } } }
     .notes { display: grid; grid-template-columns: 250px minmax(0, 1fr) 260px; height: 100%; &.no-side { grid-template-columns: 250px minmax(0, 1fr); .side { display: none; } } }
     .tree { border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
     .top { padding: 10px; gap: 6px; } .filter { padding: 0 10px 8px; font-size: 12px; }
@@ -225,6 +303,25 @@ export class NotesComponent implements OnDestroy {
   tags = signal<TagCount[]>([]);
   results = signal<NoteSummary[]>([]);
   linked = signal<Task[]>([]);
+  mentions = signal<Mention[]>([]);
+  tplOpen = signal(false);
+  history = signal<NoteVersion[] | null>(null);
+  selected = signal<NoteVersion | null>(null);
+  private pendingSection = '';
+  when = (iso: string) => new Date(iso).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' });
+  templates = computed(() => this.list().filter(n => n.folder.split('/')[0].toLowerCase() === 'plantillas' && !n.pending));
+  /** Notas conectadas con la abierta, repartidas en círculo alrededor de ella. */
+  neighbors = computed(() => {
+    const n = this.note();
+    if (!n) return [];
+    const map = new Map<string, { id: number | null; title: string }>();
+    for (const r of [...n.backlinks, ...n.outgoing]) if (r.title.toLowerCase() !== n.title.toLowerCase()) map.set(r.title.toLowerCase(), { id: r.id, title: r.title });
+    const all = [...map.values()].slice(0, 12);
+    return all.map((r, i) => {
+      const a = (2 * Math.PI * i) / all.length - Math.PI / 2;
+      return { ...r, x: 120 + Math.cos(a) * 82, y: 95 + Math.sin(a) * 62, label: r.title.length > 16 ? r.title.slice(0, 15) + '…' : r.title };
+    });
+  });
   dialog = inject(TaskDialogService);
   note = signal<Note | null>(null);
   content = signal('');
@@ -305,6 +402,7 @@ export class NotesComponent implements OnDestroy {
         this.content.set(n.content);
         this.status.set('');
         this.loading.set(false);
+        if (this.pendingSection) { const s = this.pendingSection; this.pendingSection = ''; setTimeout(() => this.scrollToSection(s), 150); }
         // Texto escrito sin conexión y aún no enviado: tiene prioridad sobre lo que devuelve el servidor
         const draft = this.offline.get(n.id);
         if (draft && draft.content !== n.content) {
@@ -337,7 +435,11 @@ export class NotesComponent implements OnDestroy {
   private loadLinked(id: number) {
     if (id > 0) this.api.tasks({ note_id: id, include_archived: true }).subscribe({ next: t => this.linked.set(t), error: () => this.linked.set([]) });
   }
-  private apply(n: Note) { if (this.note()?.id !== n.id) { this.linked.set([]); this.loadLinked(n.id); } this.offline.activeId = n.id; this.note.set(n); this.title = n.title; this.folder = n.folder; }
+  private loadMentions(id: number) {
+    this.mentions.set([]);
+    if (id > 0) this.api.mentions(id).subscribe({ next: m => { if (this.note()?.id === id) this.mentions.set(m); }, error: () => {} });
+  }
+  private apply(n: Note) { if (this.note()?.id !== n.id) { this.linked.set([]); this.loadLinked(n.id); this.loadMentions(n.id); } this.offline.activeId = n.id; this.note.set(n); this.title = n.title; this.folder = n.folder; }
 
   // ---- Edición y guardado automático ----
   onEdit(text: string) {
@@ -440,10 +542,78 @@ export class NotesComponent implements OnDestroy {
     this.api.dailyNote(today()).subscribe({ next: n => { this.listOpen.set(false); this.loadList(); this.router.navigate(['/notes', n.id]); }, error: e => this.toast.error(e) });
   }
   /** Abre la nota enlazada; si no existe, la crea (como en Obsidian). */
-  openLink(title: string) {
+  openLink(target: string) {
+    const [title, section = ''] = target.split('#');
     const found = this.list().find(n => n.title.toLowerCase() === title.toLowerCase());
-    if (found) this.router.navigate(['/notes', found.id]);
-    else { this.flush(); this.create(title); }
+    if (!found) { this.flush(); this.create(title); return; }
+    if (found.id === this.note()?.id) { this.scrollToSection(section); return; }  // enlace a una sección de esta misma nota
+    this.pendingSection = section;
+    this.router.navigate(['/notes', found.id]);
+  }
+  /** Lleva la vista al encabezado con ese texto (enlaces [[Nota#Sección]]). */
+  private scrollToSection(section: string) {
+    const i = section ? this.outline().findIndex(h => h.text.trim().toLowerCase() === section.trim().toLowerCase()) : -1;
+    if (i >= 0) this.goTo(this.outline()[i].line, i);
+  }
+
+  // ---- Plantillas ----
+  createFromTemplate(t: NoteSummary) {
+    const now = new Date(), day = today();
+    const base = `${t.title} ${day}`;
+    let name = base, i = 1;
+    while (this.titleSet().has(name.toLowerCase())) name = `${base} (${++i})`;
+    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    this.api.createNote({ title: name, template_id: t.id, day, time }).subscribe({
+      next: n => { this.tplOpen.set(false); this.listOpen.set(false); this.loadList(); this.router.navigate(['/notes', n.id], { queryParams: { edit: 1 } }); },
+      error: e => this.toast.error(e, 'No se pudo crear la nota desde la plantilla'),
+    });
+  }
+  seedTemplates() {
+    const samples = [
+      { title: 'Reunión', content: '# {{title}}\n\n**Fecha:** {{date}} {{time}}\n**Asistentes:** \n\n## Orden del día\n- \n\n## Acuerdos\n- \n\n## Tareas\n- [ ] \n' },
+      { title: 'Diario', content: '# {{date}}\n\n## Lo más importante de hoy\n- [ ] \n\n## Notas\n\n## Cómo ha ido\n' },
+      { title: 'Proyecto', content: '# {{title}}\n\n## Objetivo\n\n## Hitos\n- [ ] \n\n## Enlaces\n- \n\n#proyecto\n' },
+    ];
+    let left = samples.length;
+    for (const s of samples) {
+      // Un 409 solo indica que ya existe una nota con ese nombre: se deja como está
+      this.api.createNote({ ...s, folder: 'Plantillas' }).subscribe({ next: () => { if (!--left) this.loadList(); }, error: () => { if (!--left) this.loadList(); } });
+    }
+  }
+
+  // ---- Historial ----
+  openHistory() {
+    const n = this.note();
+    if (!n) return;
+    this.flush();
+    this.selected.set(null);
+    this.history.set([]);
+    this.api.versions(n.id).subscribe({
+      next: v => { this.history.set(v); if (v.length) this.selectVersion(v[0]); },
+      error: e => { this.history.set(null); this.toast.error(e, 'No se pudo cargar el historial'); },
+    });
+  }
+  selectVersion(v: NoteVersion) {
+    this.selected.set(v);
+    this.api.version(this.note()!.id, v.id).subscribe({ next: full => { if (this.selected()?.id === v.id) this.selected.set(full); }, error: e => this.toast.error(e) });
+  }
+  restoreVersion() {
+    const n = this.note(), v = this.selected();
+    if (!n || !v) return;
+    clearTimeout(this.timer);
+    this.dirty = false;
+    this.api.restoreVersion(n.id, v.id).subscribe({
+      next: saved => { this.apply(saved); this.content.set(saved.content); this.status.set('Guardado'); this.history.set(null); this.loadList(); this.toast.success('Versión restaurada. La anterior sigue en el historial'); },
+      error: e => this.toast.error(e, 'No se pudo restaurar'),
+    });
+  }
+
+  linkMention(m: Mention) {
+    const n = this.note()!;
+    this.api.linkMention(n.id, m.note_id).subscribe({
+      next: saved => { this.apply({ ...saved, content: this.content() }); this.mentions.update(l => l.filter(x => x.note_id !== m.note_id)); },
+      error: e => { this.toast.error(e); this.loadMentions(n.id); },
+    });
   }
   goTo(line: number, index: number) {
     if (this.mode() === 'edit') { this.editor?.scrollToLine(line); return; }

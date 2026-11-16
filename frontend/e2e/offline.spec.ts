@@ -97,7 +97,7 @@ test('sin conexión: crear tareas y notas nuevas, que se envían al reconectar',
 
   // nota nueva escrita sin red
   await page.getByRole('link', { name: 'Notas' }).click();
-  await page.getByTitle('Nueva nota').click();
+  await page.getByTitle('Nueva nota', { exact: true }).click();
   await expect(page).toHaveURL(/notes\/-\d+/);
   await page.locator('.cm-content').click();
   await page.keyboard.type('Idea apuntada en el tren, ver [[Ideas]]');

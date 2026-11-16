@@ -175,6 +175,9 @@ label.field { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color:
   img.broken { outline: 1px dashed var(--border); }
   a.wikilink { color: var(--accent-text); cursor: pointer; text-decoration: underline; text-decoration-color: var(--accent-soft); text-underline-offset: 3px;
     &.missing { opacity: .6; text-decoration-style: dashed; text-decoration-color: currentColor; } }
+  .embed { color: var(--text-3); &.missing::before { content: "![["; } &.missing::after { content: "]]"; } }
+  .embed-box { border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: 10px 14px; margin: 0 0 .9em;
+    > div > :last-child { margin-bottom: 0; } .embed-title { display: block; font-size: .8em; margin-bottom: 6px; text-decoration: none; } }
   a.hashtag { color: var(--accent-text); background: var(--accent-soft); padding: 1px 7px; border-radius: 10px; font-size: .88em; cursor: pointer; text-decoration: none; }
 }
 

@@ -39,6 +39,10 @@ const ICONS: Record<string, string> = {
   undo: 'M8 5L4 9l4 4|M4 9h10a5 5 0 0 1 0 10h-3',
   offline: 'M3 3l18 18|M5 12.5a10 10 0 0 1 3.5-2.3|M12 9a10 10 0 0 1 7 3.5|M8.5 16a5 5 0 0 1 3.5-1.5|M12 19.5v.01',
   image: 'M4 5h16v14H4z|M4 16l5-5 4 4 3-3 4 4|M15.5 9.5a1 1 0 1 0 0-.01',
+  play: 'M8 5.5v13l10-6.5z',
+  stop: 'M7 7h10v10H7z',
+  history: 'M4 12a8 8 0 1 0 2.5-5.8L4 8.5|M4 4v4.5h4.5|M12 8v4l3 2',
+  template: 'M5 4h14v5H5z|M5 12h6v8H5z|M14 12h5|M14 16h5|M14 20h5',
   panel: 'M4 5h16v14H4z|M15 5v14',
 };
 

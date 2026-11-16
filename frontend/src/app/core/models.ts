@@ -44,13 +44,14 @@ export interface Task {
   due_date?: string | null; all_day: boolean; completed_at?: string | null; estimated_hours?: number | null;
   tags: string[]; position: number; project_id?: number | null; parent_task_id?: number | null;
   note_id?: number | null; google_event_id?: string | null; recurrence: Recurrence; reminder_minutes?: number | null;
+  time_spent_seconds: number; timer_started_at?: string | null;
   user_id: number; note_title?: string | null; owner_name: string; assignee_id?: number | null; assignee_name?: string | null; can_edit: boolean;
   created_at: string; updated_at: string; subtasks: Subtask[];
   /** Creada sin conexión y aún no enviada al servidor (id negativo provisional). */
   pending?: boolean;
 }
 export type TaskInput = Partial<Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'due_date' | 'all_day'
-  | 'estimated_hours' | 'tags' | 'project_id' | 'parent_task_id' | 'note_id' | 'recurrence' | 'reminder_minutes' | 'assignee_id'>>;
+  | 'estimated_hours' | 'tags' | 'project_id' | 'parent_task_id' | 'note_id' | 'recurrence' | 'reminder_minutes' | 'assignee_id' | 'time_spent_seconds'>>;
 export interface Comment { id: number; content: string; task_id: number; author_id: number; author_name: string; created_at: string; }
 
 export interface NoteSummary {
@@ -60,6 +61,8 @@ export interface NoteSummary {
 }
 export interface NoteRef { id: number | null; title: string; context?: string | null; }
 export interface Note extends NoteSummary { content: string; backlinks: NoteRef[]; outgoing: NoteRef[]; }
+export interface NoteVersion { id: number; title: string; created_at: string; size: number; preview: string; content?: string; }
+export interface Mention { note_id: number; title: string; context: string; }
 export interface GraphNode { id: string; label: string; kind: 'note' | 'ghost' | 'tag'; note_id?: number | null; degree: number; folder: string; }
 export interface GraphEdge { source: string; target: string; kind: 'link' | 'tag'; }
 export interface Graph { nodes: GraphNode[]; edges: GraphEdge[]; }
@@ -74,10 +77,13 @@ export interface Overview {
   notes: number; links: number; timeline: DayPoint[];
   projects: { id: number; name: string; color: string; total: number; completed: number }[];
   top_tags: { tag: string; count: number }[];
+  time_tracking: { id: number; title: string; estimated_hours: number; spent_hours: number }[];
+  spent_hours_week: number;
 }
 
 export interface Reminder { kind: 'reminder' | 'assigned'; task_id: number; title: string; due_date?: string | null; all_day: boolean; by?: string | null; }
 export interface ImportResult { created: number; updated: number; skipped: number; errors: string[]; }
 
-export interface CalendarStatus { configured: boolean; connected: boolean; email?: string | null; auto_sync: boolean; }
+export interface CalendarStatus { configured: boolean; connected: boolean; email?: string | null; auto_sync: boolean; calendar_id: string; }
+export interface CalendarInfo { id: string; name: string; primary: boolean; }
 export interface CalendarEvent { id: string; title: string; start: string; end: string; all_day: boolean; html_link?: string | null; task_id?: number | null; }

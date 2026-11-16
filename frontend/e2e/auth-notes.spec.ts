@@ -38,8 +38,8 @@ test('notas: enlaces, autocompletado, autoguardado y casillas', async ({ browser
   await typeAtEnd(page, '\nEnlace a [[Arq');
   await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('Arquitectura');
   await page.keyboard.press('Enter');
+  await expect.poll(async () => (await api('GET', '/notes/by-title/Proyecto')).content).toContain('[[Arquitectura]]');
   await expect(page.locator('.status')).toHaveText('Guardado');
-  expect((await api('GET', '/notes/by-title/Proyecto')).content).toContain('[[Arquitectura]]');
   await expect(page.locator('.side .out', { hasText: 'Arquitectura' })).toBeVisible();
 
   // marcar una casilla en la vista de lectura modifica la nota

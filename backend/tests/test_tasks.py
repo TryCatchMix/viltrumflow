@@ -128,3 +128,17 @@ def test_time_tracking(client, auth):
     o = client.get("/api/v1/stats/overview", headers=auth).json()
     assert o["time_tracking"] == [{"id": a["id"], "title": "Informe", "estimated_hours": 2, "spent_hours": 1.5}]
     assert o["spent_hours_week"] == 1.7
+
+
+def test_datetimes_always_carry_a_timezone(client, auth):
+    """Sin zona horaria, el navegador leería las horas como locales (pasaba con SQLite)."""
+    import re
+    t = client.post(T, headers=auth, json={"title": "Con hora", "all_day": False, "due_date": "2026-03-11T16:30:00+01:00"}).json()
+    client.post(f"{T}/{t['id']}/timer/start", headers=auth)
+    client.post(f"{T}/{t['id']}/comments", headers=auth, json={"content": "hola"})
+    t = client.get(f"{T}/{t['id']}", headers=auth).json()
+    stamps = [t["due_date"], t["created_at"], t["updated_at"], t["timer_started_at"],
+              client.get(f"{T}/{t['id']}/comments", headers=auth).json()[0]["created_at"],
+              client.get("/api/v1/notes", headers=auth).json()[0]["updated_at"],
+              client.get("/api/v1/auth/me", headers=auth).json()["created_at"]]
+    assert all(re.search(r"(Z|[+-]\d{2}:\d{2})$", s) for s in stamps), stamps

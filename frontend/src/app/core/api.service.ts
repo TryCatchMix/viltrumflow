@@ -5,7 +5,7 @@ import { map, tap } from 'rxjs/operators';
 import { Outbox, asNote, asTask } from './outbox';
 import { environment } from '../../environments/environment';
 import {
-  CalendarEvent, CalendarStatus, ChecklistItem, Comment, Graph, ImportResult, Member, Note, NoteSummary, Overview, Project,
+  CalendarEvent, CalendarInfo, CalendarStatus, ChecklistItem, Mention, NoteVersion, Comment, Graph, ImportResult, Member, Note, NoteSummary, Overview, Project,
   Reminder, Role, SearchResult, TrashItem, Status, TagCount, Task, TaskInput,
 } from './models';
 
@@ -98,7 +98,7 @@ export class ApiService {
   /** Nota creada solo en el dispositivo, para cuando no hay conexión. */
   createLocalNote(title: string, folder = ''): Note { const n = asNote(this.outbox.addNote(title, '', folder)); this.notesChanged.next(); return n; }
   noteByTitle(title: string) { return this.http.get<Note>(`${this.base}/notes/by-title/${encodeURIComponent(title)}`); }
-  createNote(data: { title: string; content?: string; folder?: string }) { return this.n(this.http.post<Note>(`${this.base}/notes`, data)); }
+  createNote(data: { title: string; content?: string; folder?: string; template_id?: number; day?: string; time?: string }) { return this.n(this.http.post<Note>(`${this.base}/notes`, data)); }
   updateNote(id: number, data: Partial<Pick<Note, 'title' | 'content' | 'folder' | 'is_pinned'>>) {
     if (id < 0) {
       const { is_pinned, ...local } = data;
@@ -133,6 +133,14 @@ export class ApiService {
     return this.t(this.n(this.http.post<Task>(`${this.base}/notes/${noteId}/checklist/convert`, { line, ...extra })));
   }
 
+  versions(noteId: number) { return this.http.get<NoteVersion[]>(`${this.base}/notes/${noteId}/versions`); }
+  version(noteId: number, id: number) { return this.http.get<NoteVersion>(`${this.base}/notes/${noteId}/versions/${id}`); }
+  restoreVersion(noteId: number, id: number) { return this.n(this.http.post<Note>(`${this.base}/notes/${noteId}/versions/${id}/restore`, null)); }
+  mentions(noteId: number) { return this.http.get<Mention[]>(`${this.base}/notes/${noteId}/mentions`); }
+  linkMention(noteId: number, sourceId: number) { return this.n(this.http.post<Note>(`${this.base}/notes/${noteId}/mentions/${sourceId}/link`, null)); }
+  startTimer(taskId: number) { return this.t(this.http.post<Task>(`${this.base}/tasks/${taskId}/timer/start`, null)); }
+  stopTimer(taskId: number) { return this.t(this.http.post<Task>(`${this.base}/tasks/${taskId}/timer/stop`, null)); }
+
   // Estadísticas y búsqueda
   overview(days: number) {
     return this.http.get<Overview>(`${this.base}/stats/overview`, { params: params({ days, tz_offset: -new Date().getTimezoneOffset() }) });
@@ -144,6 +152,7 @@ export class ApiService {
   calendarAuthUrl() { return this.http.get<{ url: string }>(`${this.base}/calendar/auth-url`); }
   calendarEvents(start: string, end: string) { return this.http.get<CalendarEvent[]>(`${this.base}/calendar/events`, { params: params({ start, end }) }); }
   calendarSync() { return this.t(this.http.post<{ synced: number; failed: number }>(`${this.base}/calendar/sync`, null)); }
-  calendarSettings(auto_sync: boolean) { return this.http.put<CalendarStatus>(`${this.base}/calendar/settings`, { auto_sync }); }
+  calendarSettings(data: { auto_sync?: boolean; calendar_id?: string }) { return this.http.put<CalendarStatus>(`${this.base}/calendar/settings`, data); }
+  calendars() { return this.http.get<CalendarInfo[]>(`${this.base}/calendar/calendars`); }
   calendarDisconnect() { return this.http.delete<void>(`${this.base}/calendar/disconnect`); }
 }

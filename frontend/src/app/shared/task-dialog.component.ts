@@ -1,11 +1,11 @@
-import { Component, HostListener, effect, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
 import { Comment, Member, PRIORITIES, PRIORITY_LABEL, Priority, Project, RECURRENCE_LABEL, REMINDER_OPTIONS, Recurrence, STATUS_LABEL, Status, Subtask, Task } from '../core/models';
 import { ToastService } from '../core/toast.service';
-import { relativeTime, taskDay, taskTime, toDue } from '../core/util';
+import { formatDuration, relativeTime, spentSeconds, taskDay, taskTime, toDue } from '../core/util';
 import { IconComponent } from './icon.component';
 import { TaskDialogService } from './task-dialog.service';
 
@@ -98,6 +98,22 @@ import { TaskDialogService } from './task-dialog.service';
         <p class="ro"><app-icon name="offline" [size]="14" /> Creada sin conexión. Se enviará al reconectar; entonces podrás añadirle subtareas y comentarios.</p>
       }
       @if (task && !task.pending) {
+        <section class="timer">
+          <h3>Tiempo dedicado</h3>
+          <div class="row">
+            <strong class="clock" [class.on]="running()">{{ duration(elapsed()) }}</strong>
+            @if (f.estimated_hours) { <span class="muted">de {{ f.estimated_hours }} h estimadas</span> }
+            <span class="spacer"></span>
+            @if (!readOnly()) {
+              @if (running()) { <button class="btn" (click)="timer(false)"><app-icon name="stop" /> Parar</button> }
+              @else { <button class="btn" (click)="timer(true)" [disabled]="f.status === 'completed'"><app-icon name="play" /> Empezar</button> }
+            }
+          </div>
+          @if (!readOnly() && !running()) {
+            <label class="row adjust muted">Corregir a mano:
+              <input class="input" type="number" min="0" step="5" [ngModel]="minutes()" (change)="setMinutes($any($event.target).value)" [ngModelOptions]="{ standalone: true }" aria-label="Minutos dedicados" /> min</label>
+          }
+        </section>
         <section>
           <h3>Subtareas @if (subtasks().length) { <span class="muted">{{ doneCount() }}/{{ subtasks().length }}</span> }</h3>
           @if (task.note_title) {
@@ -145,6 +161,8 @@ import { TaskDialogService } from './task-dialog.service';
     .body fieldset { display: grid; gap: 12px; border: none; padding: 0; margin: 0; min-width: 0; }
     .ro { display: flex; gap: 8px; align-items: center; font-size: 13px; background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 10px; color: var(--text-2); }
     .by { font-size: 12px; margin-top: -4px; }
+    .clock { font-size: 20px; font-variant-numeric: tabular-nums; font-weight: 600; &.on { color: var(--accent-text); } }
+    .adjust { font-size: 12px; .input { width: 84px; height: 26px; } }
     .from { font-size: 13px; gap: 6px; }
     .title { height: 38px; font-size: 16px; font-weight: 500; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -155,7 +173,8 @@ import { TaskDialogService } from './task-dialog.service';
     .comment { background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 13px; p { white-space: pre-wrap; overflow-wrap: anywhere; } .muted { font-size: 12px; } }
   `],
 })
-export class TaskDialogComponent {
+export class TaskDialogComponent implements OnDestroy {
+  ngOnDestroy() { clearInterval(this.interval); }
   svc = inject(TaskDialogService);
   private api = inject(ApiService);
   private toast = inject(ToastService);
@@ -181,6 +200,14 @@ export class TaskDialogComponent {
   subtasks = signal<Subtask[]>([]);
   comments = signal<Comment[]>([]);
   saving = signal(false);
+  duration = formatDuration;
+  /** Tarea con los datos de tiempo al día (el panel puede arrancar y parar el cronómetro sin cerrarse). */
+  private timed = signal<Task | null>(null);
+  private tick = signal(Date.now());
+  private interval?: ReturnType<typeof setInterval>;
+  running = computed(() => !!this.timed()?.timer_started_at);
+  elapsed = computed(() => (this.timed() ? spentSeconds(this.timed()!, this.tick()) : 0));
+  minutes = computed(() => Math.round((this.timed()?.time_spent_seconds ?? 0) / 60));
   newSub = '';
   newComment = '';
   doneCount = () => this.subtasks().filter(s => s.status === 'completed').length;
@@ -188,7 +215,10 @@ export class TaskDialogComponent {
   constructor() {
     effect(() => {
       const st = this.svc.state();
+      clearInterval(this.interval);
+      this.timed.set(st?.mode === 'edit' ? st.task : null);
       if (!st) return;
+      this.interval = setInterval(() => { if (this.running()) this.tick.set(Date.now()); }, 1000);
       this.newSub = this.newComment = '';
       this.api.projects().subscribe(p => this.projects.set(p));
       if (st.mode === 'edit') {
@@ -224,6 +254,19 @@ export class TaskDialogComponent {
     return { title: '', description: '', status: 'todo' as Status, priority: 'medium' as Priority, day: '', time: '',
       project_id: null as number | null, estimated_hours: null as number | null, tags: '',
       recurrence: 'none' as Recurrence, reminder_minutes: null as number | null, assignee_id: null as number | null };
+  }
+
+  timer(start: boolean) {
+    const t = this.task;
+    if (!t) return;
+    (start ? this.api.startTimer(t.id) : this.api.stopTimer(t.id)).subscribe({
+      next: saved => { this.timed.set(saved); this.tick.set(Date.now()); }, error: e => this.toast.error(e),
+    });
+  }
+  setMinutes(value: string) {
+    const m = Math.max(0, Math.round(Number(value) || 0));
+    if (!this.task) return;
+    this.api.updateTask(this.task.id, { time_spent_seconds: m * 60 }).subscribe({ next: saved => this.timed.set(saved), error: e => this.toast.error(e) });
   }
 
   onProject(id: number | null) { this.f.assignee_id = null; this.loadMembers(id); }

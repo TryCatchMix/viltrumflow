@@ -64,6 +64,13 @@ const SHORT = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' });
           <header class="row"><h2>Avance por proyecto</h2><span class="spacer"></span><a routerLink="/projects">Ver todos</a></header>
           <app-bar-list [bars]="projectBars()" [progress]="true" empty="Aún no hay proyectos" />
         </section>
+        @if (o.time_tracking.length) {
+          <section class="card panel wide">
+            <header class="row"><h2>Tiempo: dedicado frente a estimado (horas)</h2><span class="spacer"></span>
+              <span class="muted small">{{ o.spent_hours_week }} h registradas esta semana</span></header>
+            <app-bar-list [bars]="timeBars()" [progress]="true" [dots]="false" />
+          </section>
+        }
         <section class="card panel">
           <header class="row"><h2>Próximas tareas</h2><span class="spacer"></span><a routerLink="/tasks">Ver todas</a></header>
           @for (t of upcoming(); track t.id) {
@@ -89,7 +96,7 @@ const SHORT = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' });
     .panel { padding: 16px 18px; display: grid; gap: 14px; align-content: start; min-width: 0; header a { font-size: 13px; } }
     .wide { grid-column: 1 / -1; }
     .up { background: none; border: none; padding: 5px 6px; margin: 0 -6px; border-radius: var(--radius-sm); text-align: left; width: calc(100% + 12px); &:hover { background: var(--surface-2); } }
-    .late { color: var(--critical); }
+    .late { color: var(--critical); } .small { font-size: 12px; }
     .tbl { max-height: 240px; overflow: auto; } table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
     th, td { text-align: right; padding: 5px 10px; border-bottom: 1px solid var(--border); } th:first-child, td:first-child { text-align: left; } th { color: var(--text-3); font-weight: 500; position: sticky; top: 0; background: var(--surface); }
     @media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
@@ -122,6 +129,12 @@ export class DashboardComponent implements OnInit {
   statusBars = computed<Bar[]>(() => BOARD_STATUSES.map(s => ({ label: STATUS_LABEL[s], value: this.data()!.by_status[s] })));
   priorityBars = computed<Bar[]>(() => PRIORITIES.map(p => ({ label: PRIORITY_LABEL[p], value: this.data()!.by_priority[p] })));
   projectBars = computed<Bar[]>(() => this.data()!.projects.map(p => ({ label: p.name, value: p.completed, total: p.total, color: p.color })));
+  /** Barra llena = estimación cumplida; en rojo si ya se ha superado. */
+  timeBars = computed<Bar[]>(() => this.data()!.time_tracking.map(t => ({
+    label: t.title, value: t.spent_hours, total: t.estimated_hours,
+    color: t.spent_hours > t.estimated_hours ? 'var(--critical)' : 'var(--series-1)',
+    hint: `${t.spent_hours} h dedicadas de ${t.estimated_hours} h estimadas${t.spent_hours > t.estimated_hours ? ' (superada)' : ''}`,
+  })));
   upcoming = computed(() => this.tasks()
     .filter(t => t.due_date && t.status !== 'completed' && taskDay(t)! <= addDays(today(), 14))
     .sort((a, b) => a.due_date!.localeCompare(b.due_date!)).slice(0, 7));
