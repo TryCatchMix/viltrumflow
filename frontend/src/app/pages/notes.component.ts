@@ -4,9 +4,10 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
 import { ApiService } from '../core/api.service';
+import { OfflineService } from '../core/offline.service';
 import { Note, NoteSummary, TagCount } from '../core/models';
 import { ToastService } from '../core/toast.service';
-import { relativeTime, today } from '../core/util';
+import { isOffline, relativeTime, today } from '../core/util';
 import { EditorComponent } from '../shared/editor.component';
 import { IconComponent } from '../shared/icon.component';
 import { headings, toggleCheckboxLine } from '../shared/markdown';
@@ -186,6 +187,7 @@ export class NotesComponent implements OnDestroy {
   private toast = inject(ToastService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private offline = inject(OfflineService);
   @ViewChild(EditorComponent) editor?: EditorComponent;
   @ViewChild('reader') reader?: { nativeElement: HTMLElement };
   rel = relativeTime;
@@ -229,6 +231,7 @@ export class NotesComponent implements OnDestroy {
 
   constructor() {
     this.loadList(true);
+    addEventListener('online', this.onOnline);
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe(p => {
       const id = Number(p.get('id'));
       if (id) this.open(id);
@@ -237,7 +240,9 @@ export class NotesComponent implements OnDestroy {
       .subscribe(r => this.results.set(r));
   }
 
-  ngOnDestroy() { this.flush(); }
+  ngOnDestroy() { this.flush(); this.offline.activeId = null; removeEventListener('online', this.onOnline); }
+  /** Al volver la red, envía lo que quedó pendiente de la nota abierta. */
+  private onOnline = () => { const n = this.note(); if (n && this.offline.get(n.id)) { this.dirty = true; this.flush(); } };
   @HostListener('window:beforeunload') onUnload() { this.flush(); }
 
   private loadList(initial = false) {
@@ -264,16 +269,36 @@ export class NotesComponent implements OnDestroy {
         this.content.set(n.content);
         this.status.set('');
         this.loading.set(false);
+        // Texto escrito sin conexión y aún no enviado: tiene prioridad sobre lo que devuelve el servidor
+        const draft = this.offline.get(n.id);
+        if (draft && draft.content !== n.content) {
+          if (n.updated_at === draft.base || !navigator.onLine) { this.content.set(draft.content); this.dirty = true; this.flush(); }
+          else { this.offline.activeId = null; this.offline.sync().then(() => { this.offline.activeId = n.id; this.loadList(); }); }  // cambió en otro sitio: copia aparte
+        } else if (draft) this.offline.remove(n.id);
         if (this.route.snapshot.queryParamMap.get('edit')) {
           if (this.mode() === 'preview') this.mode.set('edit');
           setTimeout(() => this.editor?.focus(), 50);
         }
       },
-      error: () => { this.note.set(null); this.loading.set(false); this.missing.set(true); },
+      error: () => {
+        this.loading.set(false);
+        // Sin red y sin copia del servidor, pero con texto escrito en este dispositivo: se abre desde ahí
+        const draft = this.offline.get(id);
+        if (draft) {
+          const s = this.list().find(x => x.id === id);
+          this.apply({ id, title: draft.title, folder: s?.folder ?? '', tags: s?.tags ?? [], is_pinned: !!s?.is_pinned, is_daily: !!s?.is_daily,
+            created_at: s?.created_at ?? draft.base, updated_at: draft.base, content: draft.content, backlinks: [], outgoing: [] });
+          this.content.set(draft.content);
+          this.status.set('Sin conexión · guardado en este dispositivo');
+          return;
+        }
+        this.note.set(null);
+        this.missing.set(true);
+      },
     });
   }
 
-  private apply(n: Note) { this.note.set(n); this.title = n.title; this.folder = n.folder; }
+  private apply(n: Note) { this.offline.activeId = n.id; this.note.set(n); this.title = n.title; this.folder = n.folder; }
 
   // ---- Edición y guardado automático ----
   onEdit(text: string) {
@@ -294,12 +319,22 @@ export class NotesComponent implements OnDestroy {
     this.status.set('Guardando…');
     this.api.updateNote(n.id, { content: sent }).subscribe({
       next: saved => {
+        this.offline.remove(saved.id);
         if (this.note()?.id !== saved.id) { this.loadList(); return; }  // ya se abrió otra nota
         this.apply({ ...saved, content: this.content() });
         if (!this.dirty) this.status.set('Guardado');
         this.loadList();
       },
-      error: e => { if (this.note()?.id === n.id) { this.dirty = true; this.status.set('Error al guardar'); } this.toast.error(e, 'No se pudo guardar la nota'); },
+      error: e => {
+        if (isOffline(e)) {
+          // Sin red: el texto se queda en este dispositivo y se envía al reconectar
+          this.offline.save(n.id, n.title, sent, n.updated_at);
+          if (this.note()?.id === n.id) this.status.set('Sin conexión · guardado en este dispositivo');
+          return;
+        }
+        if (this.note()?.id === n.id) { this.dirty = true; this.status.set('Error al guardar'); }
+        this.toast.error(e, 'No se pudo guardar la nota');
+      },
     });
   }
 
@@ -328,8 +363,9 @@ export class NotesComponent implements OnDestroy {
   }
   remove() {
     const n = this.note()!;
-    if (!confirm(`¿Eliminar la nota «${n.title}»? Esta acción no se puede deshacer.`)) return;
+    if (!confirm(`¿Enviar la nota «${n.title}» a la papelera? Podrás restaurarla durante 30 días.`)) return;
     this.dirty = false;
+    this.offline.remove(n.id);
     this.api.deleteNote(n.id).subscribe({
       next: () => {
         this.note.set(null);

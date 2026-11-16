@@ -37,8 +37,19 @@ export class NotificationService {
     this.api.pollReminders().subscribe({ next: list => list.forEach(r => this.notify(r)), error: () => {} });
   }
 
+  private assigned(r: Reminder) {
+    const where = r.by ? ` en «${r.by}»` : '';
+    this.toast.show(`Te han asignado una tarea${where}: ${r.title}`, 'info', 12_000);
+    this.api.tasksChanged.next();
+    if (this.supported && Notification.permission === 'granted') {
+      const n = new Notification('Nueva tarea asignada', { body: `${r.title}${where}`, tag: `vf-assigned-${r.task_id}` });
+      n.onclick = () => { window.focus(); this.api.task(r.task_id).subscribe({ next: t => this.dialog.edit(t), error: () => {} }); n.close(); };
+    }
+  }
+
   private notify(r: Reminder) {
-    const when = r.all_day ? 'vence hoy o mañana' : `a las ${TIME.format(new Date(r.due_date))}`;
+    if (r.kind === 'assigned') return this.assigned(r);
+    const when = r.all_day || !r.due_date ? 'vence hoy o mañana' : `a las ${TIME.format(new Date(r.due_date))}`;
     const open = () => this.api.task(r.task_id).subscribe({ next: t => this.dialog.edit(t), error: () => {} });
     // Siempre queda el aviso dentro de la app; la notificación del sistema es un extra si hay permiso
     this.toast.show(`Recordatorio: ${r.title} (${when})`, 'info', 12_000);

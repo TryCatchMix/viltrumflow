@@ -2,7 +2,9 @@ import { Component, OnDestroy, OnInit, ViewChild, inject, signal } from '@angula
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { AuthService } from '../core/auth.service';
+import { SwUpdate } from '@angular/service-worker';
 import { NotificationService } from '../core/notification.service';
+import { OfflineService } from '../core/offline.service';
 import { ThemeService } from '../core/theme.service';
 import { ToastService } from '../core/toast.service';
 import { IconComponent } from '../shared/icon.component';
@@ -42,6 +44,16 @@ import { CommandPaletteComponent } from './command-palette.component';
     </nav>
     <div class="scrim" (click)="navOpen.set(false)"></div>
     <main>
+      @if (!offline.online()) {
+        <div class="offline" role="status"><app-icon name="offline" [size]="14" />
+          Sin conexión. Puedes consultar lo que ya habías abierto y seguir escribiendo notas; se sincronizarán al volver.</div>
+      } @else if (offline.pending()) {
+        <div class="offline sync" role="status"><app-icon name="sync" [size]="14" /> {{ offline.pending() }} nota(s) pendientes de sincronizar
+          <button class="btn sm" (click)="offline.sync()">Sincronizar</button></div>
+      }
+      @if (updateReady()) {
+        <div class="offline sync" role="status">Hay una versión nueva de ViltrumFlow. <button class="btn sm" (click)="reload()">Actualizar</button></div>
+      }
       <button class="btn ghost icon burger" (click)="navOpen.set(true)" aria-label="Abrir menú"><app-icon name="menu" [size]="18" /></button>
       <router-outlet />
     </main>
@@ -72,6 +84,8 @@ import { CommandPaletteComponent } from './command-palette.component';
     .me { flex: 1; color: var(--text); font-weight: 500; padding: 2px 4px; border-radius: var(--radius-sm); &:hover { background: var(--surface-2); text-decoration: none; } }
     .avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--surface-3); display: grid; place-content: center; font-size: 12px; font-weight: 600; flex: none; }
     main { flex: 1; min-width: 0; overflow-y: auto; position: relative; display: flex; flex-direction: column; }
+    .offline { display: flex; align-items: center; gap: 8px; padding: 7px 16px; font-size: 13px; background: color-mix(in srgb, var(--warning) 16%, var(--surface)); border-bottom: 1px solid var(--border); flex: none;
+      &.sync { background: var(--accent-soft); } }
     .burger, .scrim { display: none; }
     .toasts { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 100; display: grid; gap: 8px; width: max-content; max-width: calc(100vw - 32px); }
     .toast { background: var(--surface-3); border: 1px solid var(--border); border-left: 3px solid var(--accent); padding: 9px 14px; border-radius: var(--radius-sm); box-shadow: var(--shadow); cursor: pointer;
@@ -87,6 +101,10 @@ import { CommandPaletteComponent } from './command-palette.component';
 })
 export class ShellComponent implements OnInit, OnDestroy {
   private notifications = inject(NotificationService);
+  private sw = inject(SwUpdate);
+  offline = inject(OfflineService);
+  updateReady = signal(false);
+  reload() { location.reload(); }
   auth = inject(AuthService);
   theme = inject(ThemeService);
   toast = inject(ToastService);
@@ -103,7 +121,8 @@ export class ShellComponent implements OnInit, OnDestroy {
     { path: '/calendar', icon: 'calendar', label: 'Calendario' },
     { path: '/projects', icon: 'folder', label: 'Proyectos', gap: true },
     { path: '/notes', icon: 'note', label: 'Notas' },
-    { path: '/graph', icon: 'graph', label: 'Grafo' },
+    { path: '/graph', icon: 'graph', label: 'Grafo', gap: true },
+    { path: '/trash', icon: 'trash', label: 'Papelera' },
   ];
   initial = () => (this.auth.user()?.full_name || this.auth.user()?.username || '?').charAt(0).toUpperCase();
 
@@ -120,6 +139,8 @@ export class ShellComponent implements OnInit, OnDestroy {
       error: () => {},
     });
     this.notifications.start();
+    this.offline.sync();
+    if (this.sw.isEnabled) this.sw.versionUpdates.subscribe(e => { if (e.type === 'VERSION_READY') this.updateReady.set(true); });
     this.router.events.pipe(filter(e => e instanceof NavigationEnd)).subscribe(() => this.navOpen.set(false));
   }
 }

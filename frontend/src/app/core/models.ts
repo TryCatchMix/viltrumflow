@@ -31,7 +31,12 @@ export interface Token { access_token: string; refresh_token: string; token_type
 export interface Project {
   id: number; name: string; description?: string | null; color: string; is_archived: boolean;
   created_at: string; updated_at: string; total_tasks: number; completed_tasks: number;
+  role: Role; owner_name: string; member_count: number;
 }
+export type Role = 'owner' | 'editor' | 'viewer';
+export const ROLE_LABEL: Record<Role, string> = { owner: 'Propietario', editor: 'Puede editar', viewer: 'Solo lectura' };
+export interface Member { user_id: number; username: string; name: string; role: Role; }
+export interface TrashItem { kind: 'note' | 'task'; id: number; title: string; detail?: string | null; deleted_at: string; purge_at: string; }
 
 export interface Subtask { id: number; title: string; status: Status; }
 export interface Task {
@@ -39,10 +44,11 @@ export interface Task {
   due_date?: string | null; all_day: boolean; completed_at?: string | null; estimated_hours?: number | null;
   tags: string[]; position: number; project_id?: number | null; parent_task_id?: number | null;
   note_id?: number | null; google_event_id?: string | null; recurrence: Recurrence; reminder_minutes?: number | null;
+  user_id: number; owner_name: string; assignee_id?: number | null; assignee_name?: string | null; can_edit: boolean;
   created_at: string; updated_at: string; subtasks: Subtask[];
 }
 export type TaskInput = Partial<Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'due_date' | 'all_day'
-  | 'estimated_hours' | 'tags' | 'project_id' | 'parent_task_id' | 'note_id' | 'recurrence' | 'reminder_minutes'>>;
+  | 'estimated_hours' | 'tags' | 'project_id' | 'parent_task_id' | 'note_id' | 'recurrence' | 'reminder_minutes' | 'assignee_id'>>;
 export interface Comment { id: number; content: string; task_id: number; author_id: number; author_name: string; created_at: string; }
 
 export interface NoteSummary {
@@ -67,7 +73,7 @@ export interface Overview {
   top_tags: { tag: string; count: number }[];
 }
 
-export interface Reminder { task_id: number; title: string; due_date: string; all_day: boolean; }
+export interface Reminder { kind: 'reminder' | 'assigned'; task_id: number; title: string; due_date?: string | null; all_day: boolean; by?: string | null; }
 export interface ImportResult { created: number; updated: number; skipped: number; errors: string[]; }
 
 export interface CalendarStatus { configured: boolean; connected: boolean; email?: string | null; auto_sync: boolean; }

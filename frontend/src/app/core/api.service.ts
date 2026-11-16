@@ -4,8 +4,8 @@ import { Observable, Subject } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import {
-  CalendarEvent, CalendarStatus, ChecklistItem, Comment, Graph, ImportResult, Note, NoteSummary, Overview, Project,
-  Reminder, SearchResult, Status, TagCount, Task, TaskInput,
+  CalendarEvent, CalendarStatus, ChecklistItem, Comment, Graph, ImportResult, Member, Note, NoteSummary, Overview, Project,
+  Reminder, Role, SearchResult, TrashItem, Status, TagCount, Task, TaskInput,
 } from './models';
 
 type Query = Record<string, string | number | boolean | null | undefined>;
@@ -47,6 +47,20 @@ export class ApiService {
   createProject(data: Partial<Project>) { return this.http.post<Project>(`${this.base}/projects`, data); }
   updateProject(id: number, data: Partial<Project>) { return this.http.put<Project>(`${this.base}/projects/${id}`, data); }
   deleteProject(id: number) { return this.http.delete<void>(`${this.base}/projects/${id}`); }
+
+  members(projectId: number) { return this.http.get<Member[]>(`${this.base}/projects/${projectId}/members`); }
+  addMember(projectId: number, identifier: string, role: Role) { return this.http.post<Member[]>(`${this.base}/projects/${projectId}/members`, { identifier, role }); }
+  updateMember(projectId: number, userId: number, role: Role) { return this.http.put<Member[]>(`${this.base}/projects/${projectId}/members/${userId}`, { role }); }
+  removeMember(projectId: number, userId: number) { return this.t(this.http.delete<void>(`${this.base}/projects/${projectId}/members/${userId}`)); }
+
+  // Papelera
+  trash() { return this.http.get<TrashItem[]>(`${this.base}/trash`); }
+  restore(kind: 'note' | 'task', id: number) {
+    const o = this.http.post<{ message: string }>(`${this.base}/trash/${kind}/${id}/restore`, null);
+    return kind === 'note' ? this.n(o) : this.t(o);
+  }
+  deleteForever(kind: 'note' | 'task', id: number) { return this.http.delete<void>(`${this.base}/trash/${kind}/${id}`); }
+  emptyTrash() { return this.http.delete<void>(`${this.base}/trash`); }
 
   // Notas
   notes(q?: Query) { return this.http.get<NoteSummary[]>(`${this.base}/notes`, { params: params(q) }); }

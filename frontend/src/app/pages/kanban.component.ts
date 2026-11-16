@@ -34,12 +34,13 @@ import { TaskDialogService } from '../shared/task-dialog.service';
           <div class="cards">
             @for (t of col.tasks; track t.id; let i = $index) {
               @if (over()?.status === col.status && over()?.index === i) { <div class="slot"></div> }
-              <article class="card kcard" draggable="true" [class.dragging]="dragging()?.id === t.id" tabindex="0"
+              <article class="card kcard" [attr.draggable]="t.can_edit" [class.dragging]="dragging()?.id === t.id" tabindex="0"
                        (dragstart)="onDragStart($event, t)" (dragend)="onDragEnd()"
                        (dragover)="onDragOver($event, col.status, i, true)" (click)="dialog.edit(t)" (keydown.enter)="dialog.edit(t)">
                 <p class="title">{{ t.title }}</p>
                 <div class="meta row">
                   <span class="prio" [class]="t.priority">{{ prio[t.priority] }}</span>
+                  @if (t.assignee_name) { <span class="chip" [title]="'Responsable: ' + t.assignee_name"><app-icon name="users" [size]="11" />{{ t.assignee_name }}</span> }
                   @if (projectOf(t); as p) { <span class="chip"><i class="dot" [style.background]="p.color"></i>{{ p.name }}</span> }
                   @if (t.recurrence !== 'none') { <span class="chip" [title]="'Se repite: ' + rec[t.recurrence]"><app-icon name="repeat" [size]="11" /></span> }
                 @if (t.reminder_minutes !== null && t.reminder_minutes !== undefined) { <span class="chip" title="Con recordatorio"><app-icon name="bell" [size]="11" /></span> }
@@ -98,6 +99,7 @@ export class KanbanComponent implements OnInit {
   private load() { this.api.tasks().subscribe({ next: t => this.tasks.set(t), error: e => this.toast.error(e) }); }
 
   onDragStart(e: DragEvent, t: Task) {
+    if (!t.can_edit) { e.preventDefault(); return; }
     e.dataTransfer?.setData('text/plain', String(t.id));
     if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
     setTimeout(() => this.dragging.set(t));  // tras capturar la imagen de arrastre

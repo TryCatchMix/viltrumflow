@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../core/api.service';
+import { AuthService } from '../core/auth.service';
 import { BOARD_STATUSES, ChecklistItem, PRIORITIES, PRIORITY_LABEL, RECURRENCE_LABEL, Priority, Project, STATUS_LABEL, Status, Task } from '../core/models';
 import { ToastService } from '../core/toast.service';
 import { addDays, formatDay, isOverdue, taskDay, taskTime, today } from '../core/util';
@@ -53,6 +54,7 @@ type Due = '' | 'overdue' | 'today' | 'week' | 'none';
           <option value="">Cualquier fecha</option><option value="overdue">Atrasadas</option><option value="today">Hoy</option>
           <option value="week">Próximos 7 días</option><option value="none">Sin fecha</option>
         </select>
+        <label class="row mine"><input type="checkbox" [ngModel]="mine()" (ngModelChange)="mine.set($event)" /> Asignadas a mí</label>
         <select class="input" [ngModel]="group()" (ngModelChange)="group.set($event)" aria-label="Agrupar por">
           <option value="due">Agrupar por fecha</option><option value="status">Agrupar por estado</option>
           <option value="project">Agrupar por proyecto</option><option value="priority">Agrupar por prioridad</option><option value="none">Sin agrupar</option>
@@ -67,7 +69,7 @@ type Due = '' | 'overdue' | 'today' | 'week' | 'none';
           <div class="card list">
             @for (t of g.tasks; track t.id) {
               <div class="task row" [class.done]="t.status === 'completed'" (click)="dialog.edit(t)" tabindex="0" (keydown.enter)="dialog.edit(t)">
-                <input type="checkbox" class="check" [checked]="t.status === 'completed'" (click)="$event.stopPropagation()" (change)="toggle(t)" [attr.aria-label]="'Completar ' + t.title" />
+                <input type="checkbox" class="check" [checked]="t.status === 'completed'" [disabled]="!t.can_edit" (click)="$event.stopPropagation()" (change)="toggle(t)" [attr.aria-label]="'Completar ' + t.title" />
                 <span class="title truncate">{{ t.title }}</span>
                 @if (t.recurrence !== 'none') { <span class="chip" [title]="'Se repite: ' + rec[t.recurrence]"><app-icon name="repeat" [size]="11" /></span> }
                 @if (t.reminder_minutes !== null && t.reminder_minutes !== undefined) { <span class="chip" title="Con recordatorio"><app-icon name="bell" [size]="11" /></span> }
@@ -76,6 +78,7 @@ type Due = '' | 'overdue' | 'today' | 'week' | 'none';
                 <span class="spacer"></span>
                 @if (projectOf(t); as p) { <span class="chip"><i class="dot" [style.background]="p.color"></i>{{ p.name }}</span> }
                 @if (t.status === 'in_progress' || t.status === 'review' || t.status === 'archived') { <span class="chip">{{ statusLabel[t.status] }}</span> }
+                @if (t.assignee_name) { <span class="chip" [title]="'Responsable: ' + t.assignee_name"><app-icon name="users" [size]="11" />{{ t.assignee_name }}</span> }
                 <span class="prio" [class]="t.priority">{{ priorityLabel[t.priority] }}</span>
                 @if (day(t); as d) {
                   <span class="chip due" [class.late]="overdue(t)">@if (overdue(t)) { <app-icon name="alert" [size]="11" /> }{{ fmt(d) }} {{ time(t) }}</span>
@@ -112,6 +115,8 @@ type Due = '' | 'overdue' | 'today' | 'week' | 'none';
     .quick { height: 40px; padding: 0 12px; border: 1px dashed var(--border); border-radius: var(--radius); color: var(--text-3); margin-bottom: 12px;
       &:focus-within { border-style: solid; border-color: var(--accent); }
       input { flex: 1; border: none; background: none; outline: none; height: 100%; color: var(--text); } }
+    .mine { font-size: 13px; color: var(--text-2); white-space: nowrap; cursor: pointer; }
+    .check:disabled { opacity: .4; cursor: not-allowed; }
     .filters { flex-wrap: wrap; margin-bottom: 8px; .input { width: auto; flex: 0 1 auto; } .search { flex: 1 1 160px; } }
     .group { margin: 18px 0 8px; display: flex; gap: 8px; align-items: baseline; font-size: 13px; color: var(--text-2); .muted { font-weight: 400; } }
     .list { overflow: hidden; }
@@ -149,6 +154,8 @@ export class TasksComponent implements OnInit {
   project = signal<number | null>(null);
   due = signal<Due>('');
   group = signal<Group>('due');
+  mine = signal(false);
+  private auth = inject(AuthService);
 
   openCount = computed(() => this.tasks().filter(t => t.status !== 'completed' && t.status !== 'archived').length);
   doneCount = computed(() => this.tasks().filter(t => t.status === 'completed').length);
@@ -160,9 +167,11 @@ export class TasksComponent implements OnInit {
   filtered = computed(() => {
     const q = this.q().trim().toLowerCase(), st = this.status(), pr = this.priority(), pj = this.project(), due = this.due();
     const t0 = today(), week = addDays(t0, 6);
+    const onlyMine = this.mine(), me = this.auth.user()?.id;
     return this.tasks().filter(t => {
       if (st === 'open' ? t.status === 'completed' || t.status === 'archived' : st ? t.status !== st : t.status === 'archived') return false;
       if (pr && t.priority !== pr) return false;
+      if (onlyMine && t.assignee_id !== me) return false;
       if (pj !== null && t.project_id !== pj) return false;
       if (q && !(t.title.toLowerCase().includes(q) || (t.description ?? '').toLowerCase().includes(q) || t.tags.some(x => x.includes(q.replace(/^#/, ''))))) return false;
       const d = taskDay(t);
@@ -253,7 +262,7 @@ export class TasksComponent implements OnInit {
   }
 
   clearFilters() {
-    this.q.set(''); this.status.set('open'); this.priority.set(''); this.project.set(null); this.due.set('');
+    this.q.set(''); this.status.set('open'); this.priority.set(''); this.project.set(null); this.due.set(''); this.mine.set(false);
     this.router.navigate([], { queryParams: {} });
   }
 }

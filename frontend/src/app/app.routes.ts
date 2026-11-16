@@ -19,6 +19,7 @@ export const routes: Routes = [
       { path: 'notes/:id', loadComponent: () => import('./pages/notes.component').then(m => m.NotesComponent) },
       { path: 'graph', loadComponent: () => import('./pages/graph.component').then(m => m.GraphComponent) },
       { path: 'calendar', loadComponent: () => import('./pages/calendar.component').then(m => m.CalendarComponent) },
+      { path: 'trash', loadComponent: () => import('./pages/trash.component').then(m => m.TrashComponent) },
       { path: 'settings', loadComponent: () => import('./pages/settings.component').then(m => m.SettingsComponent) },
     ],
   },

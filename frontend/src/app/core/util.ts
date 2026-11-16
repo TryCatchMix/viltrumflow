@@ -62,10 +62,16 @@ export function relativeTime(iso: string): string {
   return DAY_FMT_Y.format(new Date(iso));
 }
 
+/** ¿Falló por falta de red (y no por una respuesta del servidor)? */
+export function isOffline(err: unknown): boolean {
+  return err instanceof HttpErrorResponse && (err.status === 0 || err.status === 504);
+}
+
 /** Mensaje legible a partir de un error de la API (FastAPI devuelve `detail` como texto o lista). */
 export function errorMessage(err: unknown, fallback = 'Algo ha salido mal'): string {
   if (err instanceof HttpErrorResponse) {
-    if (err.status === 0) return 'No se puede conectar con el servidor';
+    // 504: respuesta del service worker cuando no hay red ni copia guardada
+    if (isOffline(err)) return navigator.onLine ? 'No se puede conectar con el servidor' : 'Sin conexión: este cambio no se ha guardado';
     const d = err.error?.detail;
     if (typeof d === 'string') return d;
     if (Array.isArray(d) && d.length) return String(d[0].msg ?? fallback).replace(/^Value error, /, '');

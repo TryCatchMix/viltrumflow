@@ -1,7 +1,8 @@
 import { Component, HostListener, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../core/api.service';
-import { Comment, PRIORITIES, PRIORITY_LABEL, Priority, Project, RECURRENCE_LABEL, REMINDER_OPTIONS, Recurrence, STATUS_LABEL, Status, Subtask, Task } from '../core/models';
+import { AuthService } from '../core/auth.service';
+import { Comment, Member, PRIORITIES, PRIORITY_LABEL, Priority, Project, RECURRENCE_LABEL, REMINDER_OPTIONS, Recurrence, STATUS_LABEL, Status, Subtask, Task } from '../core/models';
 import { ToastService } from '../core/toast.service';
 import { relativeTime, taskDay, taskTime, toDue } from '../core/util';
 import { IconComponent } from './icon.component';
@@ -18,11 +19,15 @@ import { TaskDialogService } from './task-dialog.service';
       <header class="row">
         <h2>{{ st.mode === 'create' ? 'Nueva tarea' : 'Tarea' }}</h2>
         <span class="spacer"></span>
-        @if (task) { <button class="btn ghost icon danger" title="Eliminar tarea" (click)="remove()"><app-icon name="trash" /></button> }
+        @if (task && !readOnly()) { <button class="btn ghost icon danger" title="Eliminar tarea" (click)="remove()"><app-icon name="trash" /></button> }
         <button class="btn ghost icon" title="Cerrar (Esc)" (click)="svc.close()"><app-icon name="x" /></button>
       </header>
 
+      @if (readOnly()) {
+        <p class="ro"><app-icon name="eye" [size]="14" /> Tienes permiso de solo lectura en este proyecto. Puedes comentar, pero no modificar la tarea.</p>
+      }
       <form class="body" (ngSubmit)="save()">
+       <fieldset [disabled]="readOnly()">
         <input class="input title" name="title" [(ngModel)]="f.title" placeholder="¿Qué hay que hacer?" required maxlength="200" #titleInput />
         <textarea class="input" name="description" [(ngModel)]="f.description" rows="4" placeholder="Descripción (opcional)"></textarea>
 
@@ -55,11 +60,19 @@ import { TaskDialogService } from './task-dialog.service';
             </select>
           </label>
           <label class="field">Proyecto
-            <select class="input" name="project" [(ngModel)]="f.project_id">
+            <select class="input" name="project" [(ngModel)]="f.project_id" (ngModelChange)="onProject($event)">
               <option [ngValue]="null">Sin proyecto</option>
-              @for (p of projects(); track p.id) { <option [ngValue]="p.id">{{ p.name }}</option> }
+              @for (p of writable(); track p.id) { <option [ngValue]="p.id">{{ p.name }}</option> }
             </select>
           </label>
+          @if (members().length > 1) {
+            <label class="field">Responsable
+              <select class="input" name="assignee" [(ngModel)]="f.assignee_id">
+                <option [ngValue]="null">Sin asignar</option>
+                @for (m of members(); track m.user_id) { <option [ngValue]="m.user_id">{{ m.name }}</option> }
+              </select>
+            </label>
+          }
           <label class="field">Estimación (horas)
             <input class="input" type="number" min="0" name="hours" [(ngModel)]="f.estimated_hours" />
           </label>
@@ -77,22 +90,28 @@ import { TaskDialogService } from './task-dialog.service';
           <button type="button" class="btn" (click)="svc.close()">Cancelar</button>
           <button class="btn primary" [disabled]="saving() || !f.title.trim()">{{ task ? 'Guardar' : 'Crear tarea' }}</button>
         </div>
+       </fieldset>
       </form>
 
       @if (task) {
         <section>
           <h3>Subtareas @if (subtasks().length) { <span class="muted">{{ doneCount() }}/{{ subtasks().length }}</span> }</h3>
+          @if (task.user_id !== me() || task.assignee_name) {
+            <p class="muted by">Creada por {{ task.owner_name }}@if (task.assignee_name) { · Responsable: {{ task.assignee_name }} }</p>
+          }
           @for (s of subtasks(); track s.id) {
             <div class="row sub">
-              <input type="checkbox" class="check" [checked]="s.status === 'completed'" (change)="toggleSub(s)" [attr.aria-label]="'Completar ' + s.title" />
+              <input type="checkbox" class="check" [checked]="s.status === 'completed'" [disabled]="readOnly()" (change)="toggleSub(s)" [attr.aria-label]="'Completar ' + s.title" />
               <span class="truncate" [class.done]="s.status === 'completed'">{{ s.title }}</span>
               <span class="spacer"></span>
-              <button class="btn ghost icon sm" title="Eliminar subtarea" (click)="removeSub(s)"><app-icon name="x" [size]="13" /></button>
+              @if (!readOnly()) { <button class="btn ghost icon sm" title="Eliminar subtarea" (click)="removeSub(s)"><app-icon name="x" [size]="13" /></button> }
             </div>
           }
-          <form class="row" (ngSubmit)="addSub()">
-            <input class="input" name="sub" [(ngModel)]="newSub" placeholder="Añadir subtarea y pulsar Intro" maxlength="200" />
-          </form>
+          @if (!readOnly()) {
+            <form class="row" (ngSubmit)="addSub()">
+              <input class="input" name="sub" [(ngModel)]="newSub" placeholder="Añadir subtarea y pulsar Intro" maxlength="200" />
+            </form>
+          }
         </section>
 
         <section>
@@ -116,7 +135,9 @@ import { TaskDialogService } from './task-dialog.service';
     .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 60; }
     .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(480px, 100vw); z-index: 61; background: var(--surface);
       border-left: 1px solid var(--border); box-shadow: var(--shadow); overflow-y: auto; padding: 16px 20px 32px; display: grid; gap: 20px; align-content: start; }
-    .body { display: grid; gap: 12px; }
+    .body fieldset { display: grid; gap: 12px; border: none; padding: 0; margin: 0; min-width: 0; }
+    .ro { display: flex; gap: 8px; align-items: center; font-size: 13px; background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 10px; color: var(--text-2); }
+    .by { font-size: 12px; margin-top: -4px; }
     .title { height: 38px; font-size: 16px; font-weight: 500; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     section { display: grid; gap: 8px; border-top: 1px solid var(--border); padding-top: 16px; }
@@ -143,6 +164,12 @@ export class TaskDialogComponent {
   task: Task | null = null;
   f = this.blank();
   projects = signal<Project[]>([]);
+  members = signal<Member[]>([]);
+  readOnly = signal(false);
+  private auth = inject(AuthService);
+  me = () => this.auth.user()?.id;
+  /** Proyectos donde se pueden crear o mover tareas (los de solo lectura no). */
+  writable = () => this.projects().filter(p => p.role !== 'viewer' || p.id === this.task?.project_id);
   subtasks = signal<Subtask[]>([]);
   comments = signal<Comment[]>([]);
   saving = signal(false);
@@ -162,14 +189,18 @@ export class TaskDialogComponent {
           title: t.title, description: t.description ?? '', status: t.status, priority: t.priority,
           day: taskDay(t) ?? '', time: taskTime(t), project_id: t.project_id ?? null,
           estimated_hours: t.estimated_hours ?? null, tags: t.tags.join(', '),
-          recurrence: t.recurrence ?? 'none', reminder_minutes: t.reminder_minutes ?? null,
+          recurrence: t.recurrence ?? 'none', reminder_minutes: t.reminder_minutes ?? null, assignee_id: t.assignee_id ?? null,
         };
+        this.readOnly.set(t.can_edit === false);
+        this.loadMembers(t.project_id ?? null);
         this.subtasks.set(t.subtasks);
         this.comments.set([]);
         this.api.comments(t.id).subscribe(c => this.comments.set(c));
       } else {
         this.task = null;
+        this.readOnly.set(false);
         const d = st.defaults;
+        this.loadMembers(d.project_id ?? null);
         this.f = { ...this.blank(), title: d.title ?? '', status: d.status ?? 'todo', priority: d.priority ?? 'medium',
           day: d.day ?? '', project_id: d.project_id ?? null };
         this.subtasks.set([]);
@@ -184,7 +215,13 @@ export class TaskDialogComponent {
   private blank() {
     return { title: '', description: '', status: 'todo' as Status, priority: 'medium' as Priority, day: '', time: '',
       project_id: null as number | null, estimated_hours: null as number | null, tags: '',
-      recurrence: 'none' as Recurrence, reminder_minutes: null as number | null };
+      recurrence: 'none' as Recurrence, reminder_minutes: null as number | null, assignee_id: null as number | null };
+  }
+
+  onProject(id: number | null) { this.f.assignee_id = null; this.loadMembers(id); }
+  private loadMembers(projectId: number | null) {
+    this.members.set([]);
+    if (projectId) this.api.members(projectId).subscribe({ next: m => this.members.set(m), error: () => {} });
   }
 
   save() {
@@ -196,6 +233,7 @@ export class TaskDialogComponent {
       estimated_hours: this.f.estimated_hours === null || (this.f.estimated_hours as unknown) === '' ? null : Number(this.f.estimated_hours),
       tags: this.f.tags.split(',').map(t => t.trim()).filter(Boolean),
       recurrence: this.f.recurrence, reminder_minutes: this.f.day ? this.f.reminder_minutes : null,
+      assignee_id: this.f.project_id ? this.f.assignee_id : null,
     };
     this.saving.set(true);
     const req = this.task ? this.api.updateTask(this.task.id, data) : this.api.createTask(data);
@@ -210,7 +248,7 @@ export class TaskDialogComponent {
   }
 
   remove() {
-    if (!this.task || !confirm(`¿Eliminar «${this.task.title}»? También se eliminarán sus subtareas.`)) return;
+    if (!this.task || !confirm(`¿Enviar «${this.task.title}» a la papelera? Podrás restaurarla durante 30 días.`)) return;
     this.api.deleteTask(this.task.id).subscribe({ next: () => this.svc.close(), error: e => this.toast.error(e) });
   }
 

@@ -21,6 +21,9 @@ notas Markdown con `[[enlaces]]` al estilo Obsidian, vista de grafo y panel con 
 | **Tablero** | Kanban con arrastrar y soltar; el orden se guarda |
 | **Calendario** | Vista mensual con tareas y eventos de Google Calendar |
 | **Panel** | Actividad diaria, carga pendiente, reparto por estado / prioridad y avance por proyecto |
+| **Proyectos compartidos** | Invita a otros usuarios como editores o con solo lectura, asigna tareas a un responsable y recibe aviso cuando te asignan una |
+| **Papelera** | Las notas y tareas eliminadas se pueden restaurar durante 30 días |
+| **Sin conexión** | Instalable como aplicación (PWA): se abre sin red, muestra lo ya consultado y permite seguir escribiendo notas |
 | **General** | Buscador y comandos con `Ctrl/⌘ + K`, tema claro/oscuro, diseño adaptable a móvil |
 
 ## Puesta en marcha
@@ -91,6 +94,39 @@ Permisos solicitados: `calendar.events` y el email de la cuenta. Los tokens se g
 - Los correos los envía un planificador dentro del backend. Si ejecutas varias réplicas, deja
   `SCHEDULER_ENABLED=true` solo en una para no duplicar envíos.
 
+## Proyectos compartidos
+
+En *Proyectos*, el botón de personas de cada tarjeta abre «Compartir»:
+
+- Se invita por **nombre de usuario o email exactos** a alguien que ya tenga cuenta.
+- **Puede editar**: crea, modifica, mueve y elimina tareas del proyecto. **Solo lectura**: las ve y puede comentar.
+- Solo el propietario edita, archiva o elimina el proyecto y gestiona quién tiene acceso. Cualquier miembro puede salirse.
+- Dentro de un proyecto compartido todas sus tareas son visibles para todos los miembros. Las notas y las tareas sin
+  proyecto son siempre privadas.
+- Una tarea se puede **asignar** a cualquier participante. El responsable recibe un aviso en la app (y por email si
+  tiene activados los recordatorios por email); los recordatorios y el panel de inicio cuentan las tareas de las que
+  cada uno es responsable.
+- Quien pierde el acceso a un proyecto deja de ver sus tareas, incluidas las que creó dentro. Si el proyecto se
+  elimina, cada tarea vuelve a quien la creó.
+- Google Calendar sincroniza cada tarea con el calendario de quien la creó.
+
+## Papelera
+
+Eliminar una nota o una tarea la envía a la *Papelera*, desde donde se restaura o se borra definitivamente. Pasados
+30 días se elimina sola. Al restaurar una nota se reconstruyen sus enlaces; si entretanto creaste otra con el mismo
+título, vuelve como «Título (restaurada)». Las subtareas eliminadas una a una y los proyectos no pasan por la papelera.
+
+## Uso sin conexión (PWA)
+
+Disponible en la build de producción (no con `ng serve`) y servida por HTTPS o en `localhost`:
+
+- **Instalar**: el navegador ofrece «Instalar ViltrumFlow» en la barra de direcciones o en su menú.
+- **Leer sin red**: la aplicación se abre y muestra las tareas, notas y proyectos que ya habías consultado con conexión.
+- **Escribir notas sin red**: los cambios se guardan en el dispositivo y se envían al reconectar. Si la nota cambió
+  mientras tanto en otro sitio, no se sobrescribe: tu versión se guarda como «Título (copia sin conexión)».
+- **Lo demás necesita conexión**: crear o modificar tareas, proyectos o notas nuevas sin red muestra un aviso y no se guarda.
+- Al cerrar sesión se borran del dispositivo los datos guardados para uso sin conexión.
+
 ## Importar y exportar notas
 
 En *Ajustes → Tus notas*:
@@ -131,14 +167,14 @@ delante tu terminación TLS (Caddy, Traefik, un balanceador…).
 backend/
   app/
     main.py  config.py  database.py  models.py  schemas.py  security.py  deps.py
-    routers/    auth · tasks · projects · notes · stats · search · reminders · calendar
-    services/   markdown · notes · vault (importar/exportar) · recurrence · reminders · mailer · google_calendar
+    routers/    auth · tasks · projects · notes · stats · search · reminders · trash · calendar
+    services/   markdown · notes · vault (importar/exportar) · access (permisos) · trash · recurrence · reminders · mailer · google_calendar
   migrations/   versiones de Alembic
   tests/
 frontend/src/app/
-  core/      API, sesión, interceptor (renovación de token), tema, utilidades
+  core/      API, sesión, interceptor (renovación de token), tema, avisos, borradores sin conexión, utilidades
   layout/    barra lateral y buscador rápido
-  pages/     dashboard · tasks · kanban · projects · notes · graph · calendar · settings · auth
+  pages/     dashboard · tasks · kanban · projects · notes · graph · calendar · trash · settings · auth
   shared/    editor, vista Markdown, gráficos, panel de tarea, iconos
 ```
 
@@ -150,7 +186,8 @@ Todas las rutas cuelgan de `/api/v1` y, salvo registro e inicio de sesión, requ
 | --- | --- |
 | Sesión | `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` · `GET/PUT/DELETE /auth/me` · `POST /auth/change-password` |
 | Tareas | `GET/POST /tasks` · `GET/PUT/DELETE /tasks/{id}` · `PATCH /tasks/{id}/move` · `/tasks/{id}/comments` |
-| Proyectos | `GET/POST /projects` · `GET/PUT/DELETE /projects/{id}` |
+| Proyectos | `GET/POST /projects` · `GET/PUT/DELETE /projects/{id}` · `GET/POST /projects/{id}/members` · `PUT/DELETE /projects/{id}/members/{user_id}` |
+| Papelera | `GET/DELETE /trash` · `POST /trash/{note\|task}/{id}/restore` · `DELETE /trash/{note\|task}/{id}` |
 | Notas | `GET/POST /notes` · `GET/PUT/DELETE /notes/{id}` · `GET /notes/by-title/{título}` · `POST /notes/daily` · `GET /notes/graph` · `GET /notes/tags` · `GET /notes/checklist` · `PATCH /notes/{id}/checklist` · `GET /notes/export` · `POST /notes/import` |
 | Otros | `GET /stats/overview` · `GET /search` · `POST /reminders/poll` · `GET /reminders/status` |
 | Calendario | `GET /calendar/status` · `GET /calendar/auth-url` · `GET /calendar/events` · `POST /calendar/sync` · `PUT /calendar/settings` · `DELETE /calendar/disconnect` |

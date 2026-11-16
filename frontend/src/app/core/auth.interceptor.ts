@@ -13,6 +13,11 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   // El token solo se envía a nuestra API, nunca a otros orígenes
   const isApi = req.url.startsWith(`${environment.apiUrl}/api/`);
+  // Sin red no se intenta escribir: el service worker descarta su copia de un recurso en cuanto
+  // recibe una petición de escritura sobre él, y dejaría de poder mostrarlo sin conexión.
+  if (isApi && req.method !== 'GET' && !navigator.onLine) {
+    return throwError(() => new HttpErrorResponse({ status: 0, statusText: 'Offline', url: req.url }));
+  }
   if (!isApi || PUBLIC.some(p => req.url.endsWith(p))) return next(req);
 
   return next(withToken(req, auth.accessToken)).pipe(
