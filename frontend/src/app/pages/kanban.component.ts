@@ -2,7 +2,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../core/api.service';
-import { BOARD_STATUSES, PRIORITY_LABEL, Project, STATUS_LABEL, Status, Task } from '../core/models';
+import { BOARD_STATUSES, PRIORITY_LABEL, RECURRENCE_LABEL, Project, STATUS_LABEL, Status, Task } from '../core/models';
 import { ToastService } from '../core/toast.service';
 import { formatDay, isOverdue, taskDay } from '../core/util';
 import { IconComponent } from '../shared/icon.component';
@@ -41,7 +41,9 @@ import { TaskDialogService } from '../shared/task-dialog.service';
                 <div class="meta row">
                   <span class="prio" [class]="t.priority">{{ prio[t.priority] }}</span>
                   @if (projectOf(t); as p) { <span class="chip"><i class="dot" [style.background]="p.color"></i>{{ p.name }}</span> }
-                  @if (t.subtasks.length) { <span class="chip">{{ subDone(t) }}/{{ t.subtasks.length }}</span> }
+                  @if (t.recurrence !== 'none') { <span class="chip" [title]="'Se repite: ' + rec[t.recurrence]"><app-icon name="repeat" [size]="11" /></span> }
+                @if (t.reminder_minutes !== null && t.reminder_minutes !== undefined) { <span class="chip" title="Con recordatorio"><app-icon name="bell" [size]="11" /></span> }
+                @if (t.subtasks.length) { <span class="chip">{{ subDone(t) }}/{{ t.subtasks.length }}</span> }
                   @if (day(t); as d) { <span class="chip" [class.late]="overdue(t)">@if (overdue(t)) { <app-icon name="alert" [size]="11" /> }{{ fmt(d) }}</span> }
                 </div>
               </article>
@@ -72,6 +74,7 @@ export class KanbanComponent implements OnInit {
   private toast = inject(ToastService);
   dialog = inject(TaskDialogService);
   label = STATUS_LABEL; prio = PRIORITY_LABEL;
+  rec = RECURRENCE_LABEL;
   fmt = formatDay; day = taskDay; overdue = isOverdue;
 
   tasks = signal<Task[]>([]);

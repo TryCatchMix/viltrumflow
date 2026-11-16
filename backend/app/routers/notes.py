@@ -2,7 +2,7 @@ from collections import Counter
 from datetime import date
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,7 @@ from ..database import get_db
 from ..deps import get_current_user
 from ..models import Note, NoteLink, User
 from ..services import markdown as md
+from ..services import vault
 from ..services.notes import find_by_title, resolve_dangling, sync_note_index
 
 router = APIRouter()
@@ -145,6 +146,36 @@ def checklist(include_done: bool = True, user: User = Depends(get_current_user),
             if text and (include_done or not checked):
                 out.append(schemas.ChecklistItem(note_id=n.id, note_title=n.title, line=line, text=text, checked=checked))
     return out
+
+
+@router.get("/export")
+def export_vault(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Descarga todas las notas como un zip de archivos .md en sus carpetas."""
+    notes = db.query(Note).filter(Note.owner_id == user.id).order_by(Note.folder, Note.title).all()
+    name = f"viltrumflow-notas-{date.today().isoformat()}.zip"
+    return Response(vault.export_zip(notes), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@router.post("/import", response_model=schemas.ImportResult)
+async def import_vault(
+    files: List[UploadFile] = File(...), overwrite: bool = False,
+    user: User = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """Importa un .zip (p. ej. un vault de Obsidian) o archivos .md sueltos. El título es el nombre del archivo."""
+    entries, total = [], 0
+    for f in files[:vault.MAX_FILES]:
+        data = await f.read(vault.MAX_TOTAL_BYTES + 1)
+        total += len(data)
+        if total > vault.MAX_TOTAL_BYTES:
+            raise HTTPException(413, "La subida supera el tamaño máximo (50 MB)")
+        try:
+            entries += vault.read_upload(f.filename or "", data)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+    if not entries:
+        raise HTTPException(400, "No se ha encontrado ninguna nota .md")
+    return vault.import_notes(db, user, entries, overwrite)
 
 
 @router.get("/by-title/{title:path}", response_model=schemas.NoteOut)

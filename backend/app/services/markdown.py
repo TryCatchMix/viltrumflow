@@ -9,10 +9,41 @@ _TAG = re.compile(r"(?<![\w/#&])#([A-Za-zÀ-ÿ_][\w/\-À-ÿ]*)")
 CHECKBOX = re.compile(r"^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\]\s+)(.*)$")
 
 
+def frontmatter_end(lines: List[str]) -> int:
+    """Número de líneas que ocupa el bloque YAML inicial (`---` … `---`) de Obsidian; 0 si no hay."""
+    if not lines or lines[0].strip() != "---":
+        return 0
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            return i + 1
+    return 0
+
+
+def frontmatter_tags(content: str) -> List[str]:
+    """Etiquetas declaradas en el frontmatter: `tags: [a, b]`, `tags: a, b` o lista con guiones."""
+    lines = content.split("\n")
+    out, in_list = [], False
+    for line in lines[1 : max(frontmatter_end(lines) - 1, 1)]:
+        m = re.match(r"^tags?:\s*(.*)$", line.strip()) if not line.startswith((" ", "\t", "-")) else None
+        if m:
+            value = m.group(1).strip().strip("[]")
+            in_list = not value
+            out += [v for v in re.split(r"[,\s]+", value) if v]
+        elif in_list and line.strip().startswith("-"):
+            out.append(line.strip()[1:].strip())
+        elif line.strip():
+            in_list = False
+    return [t.strip("\"'#").lower() for t in out if t.strip("\"'#")]
+
+
 def prose_lines(content: str) -> Iterator[Tuple[int, str]]:
-    """Líneas fuera de bloques de código, con el código en línea eliminado."""
+    """Líneas fuera del frontmatter y de bloques de código, con el código en línea eliminado."""
     in_fence = False
-    for i, line in enumerate(content.split("\n")):
+    lines = content.split("\n")
+    skip = frontmatter_end(lines)
+    for i, line in enumerate(lines):
+        if i < skip:
+            continue
         if _FENCE.match(line):
             in_fence = not in_fence
             continue
@@ -32,7 +63,8 @@ def extract_links(content: str) -> List[str]:
 
 
 def extract_tags(content: str) -> List[str]:
-    seen, out = set(), []
+    out = list(dict.fromkeys(frontmatter_tags(content)))
+    seen = set(out)
     for _, line in prose_lines(content):
         # Los enlaces pueden contener "#sección": no son etiquetas
         for m in _TAG.finditer(WIKILINK.sub("", line)):

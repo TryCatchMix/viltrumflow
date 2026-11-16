@@ -35,6 +35,20 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: Optional[str] = None
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/calendar/callback"
 
+    # Email (opcional): recordatorios y resumen diario. Sin SMTP_HOST solo hay avisos en el navegador.
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM: Optional[str] = None
+    SMTP_STARTTLS: bool = True
+    # Desactívalo en todas las réplicas menos una si ejecutas varios procesos del backend
+    SCHEDULER_ENABLED: bool = True
+
+    @property
+    def email_configured(self) -> bool:
+        return bool(self.SMTP_HOST and (self.SMTP_FROM or self.SMTP_USER))
+
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT == "production"

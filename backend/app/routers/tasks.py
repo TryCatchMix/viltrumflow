@@ -10,6 +10,7 @@ from ..database import get_db
 from ..deps import get_current_user
 from ..models import Comment, Note, Priority, Project, Status, Task, User
 from ..services import google_calendar as gcal
+from ..services.recurrence import spawn_next
 
 router = APIRouter()
 
@@ -49,6 +50,13 @@ def _tags(tags: List[str]) -> str:
             seen.add(t)
             clean.append(t)
     return ",".join(clean)[:500]
+
+
+def _after_complete(db: Session, user: User, task: Task) -> None:
+    """Si es recurrente, crea la siguiente ocurrencia y la envía al calendario."""
+    nxt = spawn_next(db, task)
+    if nxt:
+        gcal.auto_sync(db, user, nxt)
 
 
 def _apply_status(task: Task, status: Status) -> None:
@@ -109,10 +117,13 @@ def create_task(data: schemas.TaskCreate, user: User = Depends(get_current_user)
     # Las nuevas van al principio de su columna
     first = db.query(Task.position).filter(Task.user_id == user.id, Task.status == data.status).order_by(Task.position).first()
     task.position = (first[0] - 1) if first else 0
+    if task.parent_task_id is not None:
+        task.recurrence, task.reminder_minutes = "none", None
     db.add(task)
     db.commit()
     db.refresh(task)
     gcal.auto_sync(db, user, task)
+    _after_complete(db, user, task)
     return task
 
 
@@ -127,7 +138,7 @@ def update_task(task_id: int, data: schemas.TaskUpdate, user: User = Depends(get
     task = _get(db, user, task_id)
     values = data.model_dump(exclude_unset=True)
     _check_refs(db, user, values.get("project_id"), None, values.get("note_id"))
-    nullable = {"due_date", "project_id", "note_id", "description", "estimated_hours"}
+    nullable = {"due_date", "project_id", "note_id", "description", "estimated_hours", "reminder_minutes"}
     changed = set()
     for k, v in values.items():
         if v is None and k not in nullable:
@@ -142,10 +153,15 @@ def update_task(task_id: int, data: schemas.TaskUpdate, user: User = Depends(get
         if getattr(task, k) != v:
             changed.add(k)
         setattr(task, k, v)
+    if changed & {"due_date", "all_day", "reminder_minutes"}:
+        # Cambió cuándo toca avisar: el recordatorio vuelve a estar pendiente
+        task.reminder_sent_at = task.reminder_emailed_at = None
     db.commit()
     db.refresh(task)
     if changed & SYNC_FIELDS:
         gcal.auto_sync(db, user, task)
+    if "status" in changed:
+        _after_complete(db, user, task)
     return task
 
 
@@ -165,6 +181,8 @@ def move_task(task_id: int, data: schemas.TaskMove, user: User = Depends(get_cur
     db.refresh(task)
     if was_done != (task.status == Status.COMPLETED) or task.status == Status.ARCHIVED:
         gcal.auto_sync(db, user, task)
+    if not was_done:
+        _after_complete(db, user, task)
     return task
 
 

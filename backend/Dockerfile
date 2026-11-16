@@ -6,6 +6,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
+COPY alembic.ini .
+COPY migrations ./migrations
 COPY app ./app
 
 RUN useradd --create-home --uid 1000 app

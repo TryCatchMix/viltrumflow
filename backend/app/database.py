@@ -54,10 +54,27 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def init_db() -> None:
-    from . import models  # noqa: F401  (registra los modelos)
+BASELINE = "0001"  # esquema de la versión 2.0, anterior a las migraciones
 
-    Base.metadata.create_all(bind=engine)
+
+def init_db() -> None:
+    """Lleva el esquema a la última versión con Alembic (se ejecuta al arrancar)."""
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import inspect
+
+    root = Path(__file__).resolve().parent.parent
+    cfg = Config(str(root / "alembic.ini"))
+    cfg.set_main_option("script_location", str(root / "migrations"))
+    with engine.begin() as conn:
+        cfg.attributes["connection"] = conn
+        tables = set(inspect(conn).get_table_names())
+        if "users" in tables and "alembic_version" not in tables:
+            # Base creada con create_all antes de existir las migraciones: se marca como línea base
+            command.stamp(cfg, BASELINE)
+        command.upgrade(cfg, "head")
 
 
 def check_db_connection() -> bool:

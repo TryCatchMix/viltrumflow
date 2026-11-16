@@ -1,7 +1,7 @@
 import { Component, HostListener, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../core/api.service';
-import { Comment, PRIORITIES, PRIORITY_LABEL, Priority, Project, STATUS_LABEL, Status, Subtask, Task } from '../core/models';
+import { Comment, PRIORITIES, PRIORITY_LABEL, Priority, Project, RECURRENCE_LABEL, REMINDER_OPTIONS, Recurrence, STATUS_LABEL, Status, Subtask, Task } from '../core/models';
 import { ToastService } from '../core/toast.service';
 import { relativeTime, taskDay, taskTime, toDue } from '../core/util';
 import { IconComponent } from './icon.component';
@@ -43,6 +43,17 @@ import { TaskDialogService } from './task-dialog.service';
           <label class="field">Hora (vacía = todo el día)
             <input class="input" type="time" name="time" [(ngModel)]="f.time" [disabled]="!f.day" />
           </label>
+          <label class="field">Repetir
+            <select class="input" name="recurrence" [(ngModel)]="f.recurrence">
+              @for (r of recurrences; track r) { <option [value]="r">{{ recurrenceLabel[r] }}</option> }
+            </select>
+          </label>
+          <label class="field">Recordatorio
+            <select class="input" name="reminder" [(ngModel)]="f.reminder_minutes" [disabled]="!f.day">
+              <option [ngValue]="null">{{ f.day ? 'Sin recordatorio' : 'Pon una fecha primero' }}</option>
+              @for (r of reminders; track r.value) { <option [ngValue]="r.value">{{ f.time ? r.timed : r.allDay }}</option> }
+            </select>
+          </label>
           <label class="field">Proyecto
             <select class="input" name="project" [(ngModel)]="f.project_id">
               <option [ngValue]="null">Sin proyecto</option>
@@ -53,6 +64,9 @@ import { TaskDialogService } from './task-dialog.service';
             <input class="input" type="number" min="0" name="hours" [(ngModel)]="f.estimated_hours" />
           </label>
         </div>
+        @if (f.recurrence !== 'none') {
+          <p class="note"><app-icon name="repeat" [size]="13" /> Al completarla se creará la siguiente{{ f.day ? '' : ' (contando desde hoy)' }}.</p>
+        }
         <label class="field">Etiquetas (separadas por comas)
           <input class="input" name="tags" [(ngModel)]="f.tags" placeholder="trabajo, urgente" />
         </label>
@@ -107,6 +121,7 @@ import { TaskDialogService } from './task-dialog.service';
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     section { display: grid; gap: 8px; border-top: 1px solid var(--border); padding-top: 16px; }
     h3 { display: flex; gap: 8px; align-items: baseline; }
+    .note { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text-3); margin-top: -4px; }
     .sub { min-height: 28px; } .done { color: var(--text-3); text-decoration: line-through; }
     .comment { background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 13px; p { white-space: pre-wrap; overflow-wrap: anywhere; } .muted { font-size: 12px; } }
   `],
@@ -120,6 +135,9 @@ export class TaskDialogComponent {
   priorities = PRIORITIES;
   statusLabel = STATUS_LABEL;
   priorityLabel = PRIORITY_LABEL;
+  recurrences = Object.keys(RECURRENCE_LABEL) as Recurrence[];
+  recurrenceLabel = RECURRENCE_LABEL;
+  reminders = REMINDER_OPTIONS;
   rel = relativeTime;
 
   task: Task | null = null;
@@ -144,6 +162,7 @@ export class TaskDialogComponent {
           title: t.title, description: t.description ?? '', status: t.status, priority: t.priority,
           day: taskDay(t) ?? '', time: taskTime(t), project_id: t.project_id ?? null,
           estimated_hours: t.estimated_hours ?? null, tags: t.tags.join(', '),
+          recurrence: t.recurrence ?? 'none', reminder_minutes: t.reminder_minutes ?? null,
         };
         this.subtasks.set(t.subtasks);
         this.comments.set([]);
@@ -164,7 +183,8 @@ export class TaskDialogComponent {
 
   private blank() {
     return { title: '', description: '', status: 'todo' as Status, priority: 'medium' as Priority, day: '', time: '',
-      project_id: null as number | null, estimated_hours: null as number | null, tags: '' };
+      project_id: null as number | null, estimated_hours: null as number | null, tags: '',
+      recurrence: 'none' as Recurrence, reminder_minutes: null as number | null };
   }
 
   save() {
@@ -175,11 +195,16 @@ export class TaskDialogComponent {
       ...toDue(this.f.day, this.f.time), project_id: this.f.project_id,
       estimated_hours: this.f.estimated_hours === null || (this.f.estimated_hours as unknown) === '' ? null : Number(this.f.estimated_hours),
       tags: this.f.tags.split(',').map(t => t.trim()).filter(Boolean),
+      recurrence: this.f.recurrence, reminder_minutes: this.f.day ? this.f.reminder_minutes : null,
     };
     this.saving.set(true);
     const req = this.task ? this.api.updateTask(this.task.id, data) : this.api.createTask(data);
     req.subscribe({
-      next: () => { this.saving.set(false); this.svc.close(); },
+      next: () => {
+        this.saving.set(false);
+        this.svc.close();
+        if (data.status === 'completed' && data.recurrence !== 'none' && this.task?.status !== 'completed') this.toast.success('Tarea completada: se ha creado la siguiente repetición');
+      },
       error: e => { this.saving.set(false); this.toast.error(e, 'No se pudo guardar la tarea'); },
     });
   }

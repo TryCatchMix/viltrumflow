@@ -93,7 +93,7 @@ def update_me(data: schemas.UserUpdate, user: User = Depends(get_current_user), 
             raise HTTPException(409, "Ese email ya está en uso")
         values["email"] = email.lower()
     for k, v in values.items():
-        if v is None and k in ("email", "theme", "language"):
+        if v is None and k not in ("full_name", "bio", "avatar_url"):
             continue
         setattr(user, k, v)
     db.commit()

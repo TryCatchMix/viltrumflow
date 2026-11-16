@@ -4,8 +4,8 @@ import { Observable, Subject } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import {
-  CalendarEvent, CalendarStatus, ChecklistItem, Comment, Graph, Note, NoteSummary, Overview, Project,
-  SearchResult, Status, TagCount, Task, TaskInput,
+  CalendarEvent, CalendarStatus, ChecklistItem, Comment, Graph, ImportResult, Note, NoteSummary, Overview, Project,
+  Reminder, SearchResult, Status, TagCount, Task, TaskInput,
 } from './models';
 
 type Query = Record<string, string | number | boolean | null | undefined>;
@@ -64,6 +64,17 @@ export class ApiService {
   toggleChecklist(noteId: number, line: number, checked: boolean) {
     return this.http.patch<Note>(`${this.base}/notes/${noteId}/checklist`, { line, checked });
   }
+
+  exportNotes() { return this.http.get(`${this.base}/notes/export`, { responseType: 'blob' }); }
+  importNotes(files: File[], overwrite: boolean) {
+    const form = new FormData();
+    for (const f of files) form.append('files', f, f.name);
+    return this.n(this.http.post<ImportResult>(`${this.base}/notes/import`, form, { params: params({ overwrite }) }));
+  }
+
+  // Recordatorios
+  pollReminders() { return this.http.post<Reminder[]>(`${this.base}/reminders/poll`, null); }
+  notificationStatus() { return this.http.get<{ email_configured: boolean }>(`${this.base}/reminders/status`); }
 
   // Estadísticas y búsqueda
   overview(days: number) {

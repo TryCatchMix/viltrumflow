@@ -1,7 +1,8 @@
-import { Component, OnInit, ViewChild, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewChild, inject, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { AuthService } from '../core/auth.service';
+import { NotificationService } from '../core/notification.service';
 import { ThemeService } from '../core/theme.service';
 import { ToastService } from '../core/toast.service';
 import { IconComponent } from '../shared/icon.component';
@@ -84,7 +85,8 @@ import { CommandPaletteComponent } from './command-palette.component';
     }
   `],
 })
-export class ShellComponent implements OnInit {
+export class ShellComponent implements OnInit, OnDestroy {
+  private notifications = inject(NotificationService);
   auth = inject(AuthService);
   theme = inject(ThemeService);
   toast = inject(ToastService);
@@ -105,9 +107,19 @@ export class ShellComponent implements OnInit {
   ];
   initial = () => (this.auth.user()?.full_name || this.auth.user()?.username || '?').charAt(0).toUpperCase();
 
+  ngOnDestroy() { this.notifications.stop(); }
+
   ngOnInit() {
     // Un 401 aquí ya lo gestiona el interceptor (renueva o cierra sesión)
-    this.auth.loadUser().subscribe({ error: () => {} });
+    this.auth.loadUser().subscribe({
+      next: u => {
+        // La zona horaria del navegador decide a qué hora local llegan recordatorios y resumen diario
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (tz && tz !== u.timezone) this.auth.updateProfile({ timezone: tz }).subscribe({ error: () => {} });
+      },
+      error: () => {},
+    });
+    this.notifications.start();
     this.router.events.pipe(filter(e => e instanceof NavigationEnd)).subscribe(() => this.navOpen.set(false));
   }
 }

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -8,8 +9,9 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from .config import settings
-from .database import check_db_connection, init_db
-from .routers import auth, calendar, notes, projects, search, stats, tasks
+from .database import SessionLocal, check_db_connection, init_db
+from .routers import auth, calendar, notes, projects, reminders, search, stats, tasks
+from .services.reminders import run_tick
 
 logging.basicConfig(
     level=logging.DEBUG if settings.DEBUG else logging.INFO,
@@ -18,11 +20,31 @@ logging.basicConfig(
 logger = logging.getLogger("viltrumflow")
 
 
+def _tick() -> None:
+    with SessionLocal() as db:
+        run_tick(db)
+
+
+async def _scheduler() -> None:
+    """Cada minuto envía por correo los recordatorios y resúmenes que toquen."""
+    while True:
+        try:
+            await asyncio.to_thread(_tick)
+        except Exception:
+            logger.exception("Fallo en el planificador de avisos")
+        await asyncio.sleep(60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting %s v%s (%s)", settings.PROJECT_NAME, settings.VERSION, settings.ENVIRONMENT)
     init_db()
+    scheduler = None
+    if settings.SCHEDULER_ENABLED and settings.email_configured:
+        scheduler = asyncio.create_task(_scheduler())
     yield
+    if scheduler:
+        scheduler.cancel()
 
 
 app = FastAPI(
@@ -73,4 +95,5 @@ app.include_router(tasks.router, prefix=f"{P}/tasks", tags=["Tasks"])
 app.include_router(notes.router, prefix=f"{P}/notes", tags=["Notes"])
 app.include_router(stats.router, prefix=f"{P}/stats", tags=["Stats"])
 app.include_router(search.router, prefix=f"{P}/search", tags=["Search"])
+app.include_router(reminders.router, prefix=f"{P}/reminders", tags=["Reminders"])
 app.include_router(calendar.router, prefix=f"{P}/calendar", tags=["Calendar"])

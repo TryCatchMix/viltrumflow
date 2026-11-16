@@ -36,11 +36,20 @@ marked.use({
   ],
 });
 
-/** Líneas (índice base 0) que contienen una casilla, ignorando bloques de código. */
+/** Nº de líneas del bloque YAML inicial (`---` … `---`) que usan Obsidian y otros; 0 si no hay. */
+export function frontmatterEnd(lines: string[]): number {
+  if (lines[0]?.trim() !== '---') return 0;
+  for (let i = 1; i < lines.length; i++) if (lines[i].trim() === '---') return i + 1;
+  return 0;
+}
+
+/** Líneas (índice base 0) que contienen una casilla, ignorando frontmatter y bloques de código. */
 export function checkboxLines(src: string): number[] {
   const out: number[] = [];
   let fence = false;
-  src.split('\n').forEach((line, i) => {
+  const all = src.split('\n'), skip = frontmatterEnd(all);
+  all.forEach((line, i) => {
+    if (i < skip) return;
     if (FENCE.test(line)) { fence = !fence; return; }
     if (!fence && CHECKBOX.test(line)) out.push(i);
   });
@@ -57,7 +66,9 @@ export interface Heading { level: number; text: string; line: number; }
 export function headings(src: string): Heading[] {
   const out: Heading[] = [];
   let fence = false;
-  src.split('\n').forEach((line, i) => {
+  const all = src.split('\n'), skip = frontmatterEnd(all);
+  all.forEach((line, i) => {
+    if (i < skip) return;
     if (FENCE.test(line)) { fence = !fence; return; }
     const m = !fence && /^(#{1,6})\s+(.+?)\s*#*$/.exec(line);
     if (m) out.push({ level: m[1].length, text: m[2].replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_x, a, b) => b ?? a).replace(/[*_`]/g, ''), line: i });
@@ -70,7 +81,10 @@ export function headings(src: string): Heading[] {
  * El HTML del usuario pasa siempre por DOMPurify antes de llegar al DOM.
  */
 export function renderMarkdown(src: string, exists: (title: string) => boolean): string {
-  const html = DOMPurify.sanitize(marked.parse(src, { async: false }) as string, {
+  // El frontmatter son metadatos: no se muestra en la vista de lectura
+  const lines0 = src.split('\n');
+  const body = lines0.slice(frontmatterEnd(lines0)).join('\n');
+  const html = DOMPurify.sanitize(marked.parse(body, { async: false }) as string, {
     FORBID_TAGS: ['style', 'form', 'iframe', 'object', 'embed'],
     FORBID_ATTR: ['style', 'onerror', 'onclick'],
   });

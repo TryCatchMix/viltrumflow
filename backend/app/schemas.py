@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from .models import Priority, Status
 
 HEX = r"^#[0-9A-Fa-f]{6}$"
+Recurrence = Literal["none", "daily", "weekdays", "weekly", "biweekly", "monthly", "yearly"]
 
 
 class ORM(BaseModel):
@@ -42,6 +43,22 @@ class UserUpdate(BaseModel):
     avatar_url: Optional[str] = Field(None, max_length=500)
     theme: Optional[Literal["light", "dark", "auto"]] = None
     language: Optional[str] = Field(None, max_length=5)
+    timezone: Optional[str] = Field(None, max_length=64)
+    email_reminders: Optional[bool] = None
+    daily_digest: Optional[bool] = None
+    digest_hour: Optional[int] = Field(None, ge=0, le=23)
+
+    @field_validator("timezone")
+    @classmethod
+    def _tz(cls, v):
+        if v is None:
+            return v
+        from zoneinfo import ZoneInfo
+        try:
+            ZoneInfo(v)
+        except Exception:
+            raise ValueError("Zona horaria no válida")
+        return v
 
 
 class PasswordChange(BaseModel):
@@ -60,6 +77,10 @@ class UserOut(ORM):
     bio: Optional[str] = None
     theme: str
     language: str
+    timezone: str
+    email_reminders: bool
+    daily_digest: bool
+    digest_hour: int
     created_at: datetime
     last_login: Optional[datetime] = None
 
@@ -117,6 +138,8 @@ class TaskCreate(BaseModel):
     project_id: Optional[int] = None
     parent_task_id: Optional[int] = None
     note_id: Optional[int] = None
+    recurrence: Recurrence = "none"
+    reminder_minutes: Optional[int] = Field(None, ge=0, le=40320)
 
 
 class TaskUpdate(BaseModel):
@@ -130,6 +153,8 @@ class TaskUpdate(BaseModel):
     tags: Optional[List[str]] = None
     project_id: Optional[int] = None
     note_id: Optional[int] = None
+    recurrence: Optional[Recurrence] = None
+    reminder_minutes: Optional[int] = Field(None, ge=0, le=40320)
 
 
 class TaskMove(BaseModel):
@@ -159,6 +184,8 @@ class TaskOut(ORM):
     parent_task_id: Optional[int] = None
     note_id: Optional[int] = None
     google_event_id: Optional[str] = None
+    recurrence: str = "none"
+    reminder_minutes: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     subtasks: List[SubtaskOut] = []
@@ -292,6 +319,25 @@ class SearchResult(BaseModel):
     id: int
     title: str
     snippet: Optional[str] = None
+
+
+class ImportResult(BaseModel):
+    created: int = 0
+    updated: int = 0
+    skipped: int = 0
+    errors: List[str] = []
+
+
+# ---------- Recordatorios ----------
+class ReminderOut(BaseModel):
+    task_id: int
+    title: str
+    due_date: datetime
+    all_day: bool
+
+
+class NotificationStatus(BaseModel):
+    email_configured: bool
 
 
 # ---------- Calendario ----------

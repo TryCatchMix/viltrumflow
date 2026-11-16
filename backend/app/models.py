@@ -1,9 +1,9 @@
 import enum
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import List, Optional
 
 from sqlalchemy import (
-    Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint,
+    Boolean, Date, DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -55,6 +55,13 @@ class User(TimestampMixin, Base):
     # Preferencias
     theme: Mapped[str] = mapped_column(String(10), default="auto")
     language: Mapped[str] = mapped_column(String(5), default="es")
+    timezone: Mapped[str] = mapped_column(String(64), default="UTC")  # zona IANA; la envía el navegador
+
+    # Avisos por email (requieren SMTP configurado en el servidor)
+    email_reminders: Mapped[bool] = mapped_column(Boolean, default=False)
+    daily_digest: Mapped[bool] = mapped_column(Boolean, default=False)
+    digest_hour: Mapped[int] = mapped_column(Integer, default=8)  # hora local del resumen diario
+    last_digest_on: Mapped[Optional[date]] = mapped_column(Date)
 
     projects: Mapped[List["Project"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     tasks: Mapped[List["Task"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
@@ -93,6 +100,15 @@ class Task(TimestampMixin, Base):
     tags: Mapped[str] = mapped_column(String(500), default="")  # separadas por comas
     position: Mapped[int] = mapped_column(Integer, default=0)
     google_event_id: Mapped[Optional[str]] = mapped_column(String(255))
+
+    # Repetición: al completar la tarea se crea la siguiente (y `recurred` evita crearla dos veces)
+    recurrence: Mapped[str] = mapped_column(String(20), default="none")
+    recurred: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Recordatorio: minutos antes del vencimiento. Las marcas *_at evitan avisar dos veces por canal.
+    reminder_minutes: Mapped[Optional[int]] = mapped_column(Integer)
+    reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    reminder_emailed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id", ondelete="SET NULL"), index=True)

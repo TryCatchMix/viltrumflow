@@ -31,6 +31,10 @@ const ICONS: Record<string, string> = {
   clock: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z|M12 8v4l3 2',
   tag: 'M4 4h7l9 9-7 7-9-9z|M8 8v.01',
   table: 'M4 5h16v14H4z|M4 10h16|M4 15h16|M10 5v14',
+  repeat: 'M17 3l3 3-3 3|M4 11V9a3 3 0 0 1 3-3h13|M7 21l-3-3 3-3|M20 13v2a3 3 0 0 1-3 3H4',
+  bell: 'M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z|M10 20a2 2 0 0 0 4 0',
+  download: 'M12 4v11|M7 11l5 5 5-5|M5 20h14',
+  upload: 'M12 16V5|M7 9l5-5 5 5|M5 20h14',
   panel: 'M4 5h16v14H4z|M15 5v14',
 };
 

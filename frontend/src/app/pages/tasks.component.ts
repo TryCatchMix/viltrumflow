@@ -3,7 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../core/api.service';
-import { BOARD_STATUSES, ChecklistItem, PRIORITIES, PRIORITY_LABEL, Priority, Project, STATUS_LABEL, Status, Task } from '../core/models';
+import { BOARD_STATUSES, ChecklistItem, PRIORITIES, PRIORITY_LABEL, RECURRENCE_LABEL, Priority, Project, STATUS_LABEL, Status, Task } from '../core/models';
 import { ToastService } from '../core/toast.service';
 import { addDays, formatDay, isOverdue, taskDay, taskTime, today } from '../core/util';
 import { IconComponent } from '../shared/icon.component';
@@ -69,6 +69,8 @@ type Due = '' | 'overdue' | 'today' | 'week' | 'none';
               <div class="task row" [class.done]="t.status === 'completed'" (click)="dialog.edit(t)" tabindex="0" (keydown.enter)="dialog.edit(t)">
                 <input type="checkbox" class="check" [checked]="t.status === 'completed'" (click)="$event.stopPropagation()" (change)="toggle(t)" [attr.aria-label]="'Completar ' + t.title" />
                 <span class="title truncate">{{ t.title }}</span>
+                @if (t.recurrence !== 'none') { <span class="chip" [title]="'Se repite: ' + rec[t.recurrence]"><app-icon name="repeat" [size]="11" /></span> }
+                @if (t.reminder_minutes !== null && t.reminder_minutes !== undefined) { <span class="chip" title="Con recordatorio"><app-icon name="bell" [size]="11" /></span> }
                 @if (t.subtasks.length) { <span class="chip" title="Subtareas">{{ subDone(t) }}/{{ t.subtasks.length }}</span> }
                 @for (tag of t.tags.slice(0, 3); track tag) { <span class="chip tag">#{{ tag }}</span> }
                 <span class="spacer"></span>
@@ -131,6 +133,7 @@ export class TasksComponent implements OnInit {
   statuses = [...BOARD_STATUSES, 'archived' as Status];
   priorities = PRIORITIES;
   statusLabel = STATUS_LABEL; priorityLabel = PRIORITY_LABEL;
+  rec = RECURRENCE_LABEL;
   fmt = formatDay; day = taskDay; time = taskTime; overdue = isOverdue;
 
   tab = signal<'tasks' | 'notes'>('tasks');
@@ -235,7 +238,10 @@ export class TasksComponent implements OnInit {
   toggle(t: Task) {
     const status: Status = t.status === 'completed' ? 'todo' : 'completed';
     this.tasks.update(l => l.map(x => (x.id === t.id ? { ...x, status } : x)));  // optimista
-    this.api.updateTask(t.id, { status }).subscribe({ error: e => { this.toast.error(e); this.load(); } });
+    this.api.updateTask(t.id, { status }).subscribe({
+      next: () => { if (status === 'completed' && t.recurrence !== 'none') this.toast.success('Hecha. Se ha creado la siguiente repetición'); },
+      error: e => { this.toast.error(e); this.load(); },
+    });
   }
 
   toggleCheck(c: ChecklistItem) {

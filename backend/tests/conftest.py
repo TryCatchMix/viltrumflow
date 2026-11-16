@@ -7,6 +7,7 @@ os.environ.pop("GOOGLE_CLIENT_ID", None)
 os.environ.pop("GOOGLE_CLIENT_SECRET", None)
 
 import pytest
+from sqlalchemy import text
 from fastapi.testclient import TestClient
 
 from app.database import Base, engine
@@ -15,8 +16,10 @@ from app.main import app
 
 @pytest.fixture()
 def client():
+    # Base vacía: el arranque de la app la construye con las migraciones de Alembic
     Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    with engine.begin() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
     with TestClient(app, follow_redirects=False) as c:
         yield c
 

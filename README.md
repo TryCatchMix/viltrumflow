@@ -14,6 +14,9 @@ notas Markdown con `[[enlaces]]` al estilo Obsidian, vista de grafo y panel con 
 | **Etiquetas** | `#etiqueta` y anidadas `#proyecto/web`, filtro por etiqueta |
 | **Grafo** | Notas, enlaces, notas sin crear y (opcional) etiquetas; zoom, arrastre, resaltado de vecinos y búsqueda |
 | **Tareas** | Alta rápida, subtareas, comentarios, prioridad, etiquetas, fecha con o sin hora, filtros y agrupación |
+| **Recurrentes** | Cada día, días laborables, cada semana, cada 2 semanas, cada mes o cada año: al completar una tarea se crea la siguiente |
+| **Recordatorios** | Aviso en el navegador antes del vencimiento y, con SMTP configurado, por email; resumen diario por la mañana |
+| **Importar / exportar** | Todas las notas como `.zip` de archivos `.md` (se abre como vault en Obsidian) e importación de un vault o de `.md` sueltos |
 | **Casillas de notas** | Los `- [ ]` escritos en cualquier nota aparecen en *Tareas → Casillas de notas* y se pueden marcar desde ahí |
 | **Tablero** | Kanban con arrastrar y soltar; el orden se guarda |
 | **Calendario** | Vista mensual con tareas y eventos de Google Calendar |
@@ -77,6 +80,41 @@ Qué hace:
 
 Permisos solicitados: `calendar.events` y el email de la cuenta. Los tokens se guardan cifrados.
 
+## Recordatorios y email
+
+- **En el navegador**: en *Ajustes → Recordatorios y avisos* pulsa «Activar». Los avisos llegan mientras
+  ViltrumFlow está abierto en una pestaña (no hay notificaciones push con la app cerrada).
+- **Por email**: define `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` y `SMTP_FROM` en `.env`, reinicia el
+  backend y activa «Recordatorios por email» o «Resumen diario» en Ajustes. El resumen incluye las tareas de hoy
+  y las atrasadas, se envía una vez al día a la hora local elegida y se omite si no hay nada pendiente.
+- Las tareas de día completo se consideran vencidas a las 9:00 (hora local) a efectos de recordatorio.
+- Los correos los envía un planificador dentro del backend. Si ejecutas varias réplicas, deja
+  `SCHEDULER_ENABLED=true` solo en una para no duplicar envíos.
+
+## Importar y exportar notas
+
+En *Ajustes → Tus notas*:
+
+- **Exportar** descarga un `.zip` con un archivo `.md` por nota, dentro de sus carpetas.
+- **Importar** acepta un `.zip` (por ejemplo, tu carpeta de Obsidian comprimida) o archivos `.md`. El nombre del
+  archivo es el título; se ignoran `.obsidian/`, `.trash/` y lo que no sea Markdown. El frontmatter YAML se conserva
+  y sus `tags` se reconocen como etiquetas. Las notas que ya existen se omiten salvo que marques «Sobrescribir».
+- Límites: 50 MB por importación y 1 MB por nota. Los adjuntos (imágenes, PDF) no se importan.
+
+## Migraciones de base de datos
+
+El esquema se gestiona con Alembic y se actualiza solo al arrancar el backend. Una base creada con la
+versión anterior (sin migraciones) se detecta y se actualiza conservando los datos.
+
+```bash
+cd backend
+alembic revision --autogenerate -m "describe el cambio"   # tras modificar app/models.py
+alembic upgrade head                                       # también se ejecuta al arrancar
+```
+
+Revisa siempre la migración generada. En SQLite evita el modo «batch» (recrea la tabla y el borrado en
+cascada eliminaría filas relacionadas); añadir o quitar columnas funciona sin él.
+
 ## Producción
 
 ```bash
@@ -87,17 +125,15 @@ docker compose -f docker-compose.prod.yml up -d --build
 El contenedor `web` (nginx) sirve la aplicación y redirige `/api/` al backend. Escucha en HTTP: coloca
 delante tu terminación TLS (Caddy, Traefik, un balanceador…).
 
-Las tablas se crean al arrancar (`create_all`). No hay migraciones todavía: si cambias los modelos con
-datos reales, añade Alembic antes.
-
 ## Estructura
 
 ```
 backend/
   app/
     main.py  config.py  database.py  models.py  schemas.py  security.py  deps.py
-    routers/    auth · tasks · projects · notes · stats · search · calendar
-    services/   markdown (enlaces, etiquetas, casillas) · notes · google_calendar
+    routers/    auth · tasks · projects · notes · stats · search · reminders · calendar
+    services/   markdown · notes · vault (importar/exportar) · recurrence · reminders · mailer · google_calendar
+  migrations/   versiones de Alembic
   tests/
 frontend/src/app/
   core/      API, sesión, interceptor (renovación de token), tema, utilidades
@@ -115,8 +151,8 @@ Todas las rutas cuelgan de `/api/v1` y, salvo registro e inicio de sesión, requ
 | Sesión | `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` · `GET/PUT/DELETE /auth/me` · `POST /auth/change-password` |
 | Tareas | `GET/POST /tasks` · `GET/PUT/DELETE /tasks/{id}` · `PATCH /tasks/{id}/move` · `/tasks/{id}/comments` |
 | Proyectos | `GET/POST /projects` · `GET/PUT/DELETE /projects/{id}` |
-| Notas | `GET/POST /notes` · `GET/PUT/DELETE /notes/{id}` · `GET /notes/by-title/{título}` · `POST /notes/daily` · `GET /notes/graph` · `GET /notes/tags` · `GET /notes/checklist` · `PATCH /notes/{id}/checklist` |
-| Otros | `GET /stats/overview` · `GET /search` |
+| Notas | `GET/POST /notes` · `GET/PUT/DELETE /notes/{id}` · `GET /notes/by-title/{título}` · `POST /notes/daily` · `GET /notes/graph` · `GET /notes/tags` · `GET /notes/checklist` · `PATCH /notes/{id}/checklist` · `GET /notes/export` · `POST /notes/import` |
+| Otros | `GET /stats/overview` · `GET /search` · `POST /reminders/poll` · `GET /reminders/status` |
 | Calendario | `GET /calendar/status` · `GET /calendar/auth-url` · `GET /calendar/events` · `POST /calendar/sync` · `PUT /calendar/settings` · `DELETE /calendar/disconnect` |
 
 ## Licencia

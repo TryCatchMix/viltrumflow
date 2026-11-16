@@ -76,6 +76,8 @@ export class CommandPaletteComponent {
     { icon: 'calendar', label: 'Ir a Calendario', run: () => this.router.navigate(['/calendar']) },
     { icon: 'folder', label: 'Ir a Proyectos', run: () => this.router.navigate(['/projects']) },
     { icon: 'settings', label: 'Ir a Ajustes', run: () => this.router.navigate(['/settings']) },
+    { icon: 'download', label: 'Exportar notas (.zip de Markdown)', run: () => this.router.navigate(['/settings'], { fragment: 'vault' }) },
+    { icon: 'upload', label: 'Importar notas (Obsidian / .md)', run: () => this.router.navigate(['/settings'], { fragment: 'vault' }) },
     { icon: 'sun', label: 'Cambiar tema claro/oscuro', run: () => this.theme.toggle() },
   ];
 
