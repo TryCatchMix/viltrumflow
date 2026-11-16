@@ -186,6 +186,24 @@ class Note(TimestampMixin, Base):
     links: Mapped[List["NoteLink"]] = relationship(
         back_populates="source", cascade="all, delete-orphan", foreign_keys="NoteLink.source_id"
     )
+    # Cascada del ORM (no de la base de datos) para que al borrar la fila se borre también el fichero
+    attachments: Mapped[List["Attachment"]] = relationship(back_populates="note", cascade="all, delete-orphan")
+
+
+class Attachment(Base):
+    """Imagen subida a una nota. El contenido vive en UPLOAD_DIR/<owner_id>/<id>."""
+
+    __tablename__ = "attachments"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)  # uuid4 en hexadecimal: no adivinable
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    note_id: Mapped[Optional[int]] = mapped_column(ForeignKey("notes.id", ondelete="CASCADE"), index=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    content_type: Mapped[str] = mapped_column(String(50))
+    size: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    note: Mapped[Optional[Note]] = relationship(back_populates="attachments")
 
 
 class NoteLink(Base):
@@ -213,6 +231,8 @@ class GoogleAccount(TimestampMixin, Base):
     refresh_token_enc: Mapped[Optional[str]] = mapped_column(Text)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     calendar_id: Mapped[str] = mapped_column(String(255), default="primary")
+    # Última vez que se trajeron de Google los cambios hechos allí en los eventos de tareas
+    last_pull_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     auto_sync: Mapped[bool] = mapped_column(Boolean, default=True)
 
     user: Mapped[User] = relationship(back_populates="google_account")

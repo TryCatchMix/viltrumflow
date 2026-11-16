@@ -1,8 +1,10 @@
 import os
+import tempfile
 
 os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL", "sqlite://")
 os.environ["SECRET_KEY"] = "test-secret-key-test-secret-key-0123456789"
 os.environ["ENVIRONMENT"] = "test"
+os.environ["UPLOAD_DIR"] = tempfile.mkdtemp(prefix="vf-uploads-")
 os.environ.pop("GOOGLE_CLIENT_ID", None)
 os.environ.pop("GOOGLE_CLIENT_SECRET", None)
 

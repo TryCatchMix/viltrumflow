@@ -63,6 +63,8 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
 
   /** Títulos de notas para el autocompletado tras «[[». */
   @Input() titles: string[] = [];
+  /** Sube una imagen pegada o soltada y devuelve el Markdown a insertar (o lanza si no se pudo). */
+  @Input() upload?: (file: File) => Promise<string>;
   @Output() changed = new EventEmitter<string>();
   @Output() save = new EventEmitter<void>();
 
@@ -115,11 +117,36 @@ export class EditorComponent implements AfterViewInit, OnDestroy {
               this.pending = text;
               this.zone.run(() => this.changed.emit(text));
             }),
+            EditorView.domEventHandlers({
+              paste: e => this.handleFiles(e, e.clipboardData?.files),
+              drop: e => this.handleFiles(e, e.dataTransfer?.files),
+            }),
             EditorView.contentAttributes.of({ 'aria-label': 'Contenido de la nota', spellcheck: 'true' }),
           ],
         }),
       });
     });
+  }
+
+  /** Imágenes pegadas o arrastradas: se suben y se inserta su Markdown donde está el cursor. */
+  private handleFiles(e: Event, list?: FileList | null): boolean {
+    const images = Array.from(list ?? []).filter(f => f.type.startsWith('image/'));
+    if (!images.length || !this.upload) return false;  // texto normal: lo gestiona el editor
+    e.preventDefault();
+    this.zone.run(() => images.forEach(f => this.insertImage(f)));
+    return true;
+  }
+
+  async insertImage(file: File) {
+    if (!this.view || !this.upload) return;
+    const marker = `![Subiendo ${file.name || 'imagen'}…]()`;
+    const at = this.view.state.selection.main.head;
+    this.view.dispatch({ changes: { from: at, insert: marker }, selection: { anchor: at + marker.length } });
+    let text = '';
+    try { text = await this.upload(file); } catch { /* el aviso lo muestra quien sube */ }
+    // El usuario pudo seguir escribiendo: se busca el marcador en vez de fiarse de la posición
+    const pos = this.view.state.doc.toString().indexOf(marker);
+    if (pos >= 0) this.view.dispatch({ changes: { from: pos, to: pos + marker.length, insert: text } });
   }
 
   focus() { this.view?.focus(); }

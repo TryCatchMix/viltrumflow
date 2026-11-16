@@ -5,21 +5,59 @@
     {
       "name": "app",
       "installMode": "prefetch",
-      "resources": { "files": ["/favicon.ico", "/index.html", "/manifest.webmanifest", "/*.css", "/*.js"] }
+      "resources": {
+        "files": [
+          "/favicon.ico",
+          "/index.html",
+          "/manifest.webmanifest",
+          "/*.css",
+          "/*.js"
+        ]
+      }
     },
     {
       "name": "icons",
       "installMode": "lazy",
       "updateMode": "prefetch",
-      "resources": { "files": ["/icons/**"] }
+      "resources": {
+        "files": [
+          "/icons/**"
+        ]
+      }
     }
   ],
   "dataGroups": [
     {
       "name": "api",
-      "urls": ["/api/v1/auth/me", "/api/v1/tasks**", "/api/v1/notes**", "/api/v1/projects**", "/api/v1/stats/**"],
-      "cacheConfig": { "strategy": "freshness", "maxSize": 400, "maxAge": "7d", "timeout": "5s" }
+      "urls": [
+        "/api/v1/auth/me",
+        "/api/v1/tasks**",
+        "/api/v1/notes**",
+        "/api/v1/projects**",
+        "/api/v1/stats/**"
+      ],
+      "cacheConfig": {
+        "strategy": "freshness",
+        "maxSize": 400,
+        "maxAge": "7d",
+        "timeout": "5s"
+      }
+    },
+    {
+      "name": "attachments",
+      "urls": [
+        "/api/v1/attachments/**"
+      ],
+      "cacheConfig": {
+        "strategy": "performance",
+        "maxSize": 200,
+        "maxAge": "30d"
+      }
     }
   ],
-  "navigationUrls": ["/**", "!/api/**", "!/**/*.*"]
+  "navigationUrls": [
+    "/**",
+    "!/api/**",
+    "!/**/*.*"
+  ]
 }

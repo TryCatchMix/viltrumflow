@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, inject } from '@angular/core';
+import { AttachmentService } from '../core/attachment.service';
 import { renderMarkdown } from './markdown';
 
 /** Vista de lectura: pinta el Markdown ya saneado y delega los clics en enlaces, etiquetas y casillas. */
@@ -12,6 +13,7 @@ import { renderMarkdown } from './markdown';
 })
 export class MarkdownViewComponent implements OnChanges {
   private el = inject(ElementRef<HTMLElement>);
+  private attachments = inject(AttachmentService);
   @Input() content = '';
   /** Títulos existentes en minúsculas. */
   @Input() titles: Set<string> = new Set();
@@ -22,6 +24,9 @@ export class MarkdownViewComponent implements OnChanges {
   ngOnChanges() {
     // Seguro: renderMarkdown devuelve HTML pasado por DOMPurify
     this.el.nativeElement.innerHTML = renderMarkdown(this.content, t => this.titles.has(t.toLowerCase()));
+    (this.el.nativeElement as HTMLElement).querySelectorAll<HTMLImageElement>('img[data-attachment]').forEach(img => {
+      this.attachments.objectUrl(img.dataset['attachment']!).then(url => (img.src = url), () => img.classList.add('broken'));
+    });
   }
 
   @HostListener('click', ['$event'])

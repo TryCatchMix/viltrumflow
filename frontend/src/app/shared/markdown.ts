@@ -104,6 +104,14 @@ export function renderMarkdown(src: string, exists: (title: string) => boolean):
     a.setAttribute('role', 'link');
     a.tabIndex = 0;
   });
+  tpl.content.querySelectorAll<HTMLImageElement>('img').forEach(img => {
+    const src = img.getAttribute('src') ?? '';
+    img.loading = 'lazy';
+    if (!/^\/api\/v1\/attachments\/[0-9a-f]{32}$/.test(src)) return;
+    // Imagen adjunta (privada): la vista la descarga con la sesión; sin `src` el navegador no la pide por su cuenta
+    img.dataset['attachment'] = src;
+    img.removeAttribute('src');
+  });
   tpl.content.querySelectorAll<HTMLAnchorElement>('a[href]').forEach(a => { a.target = '_blank'; a.rel = 'noopener noreferrer'; });
   return tpl.innerHTML;
 }

@@ -171,6 +171,8 @@ label.field { display: grid; gap: 4px; font-size: 12px; font-weight: 500; color:
   th { background: var(--surface-2); }
   hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
   img { max-width: 100%; border-radius: var(--radius-sm); }
+  img[data-attachment]:not([src]) { display: inline-block; width: 120px; height: 80px; background: var(--surface-2); }
+  img.broken { outline: 1px dashed var(--border); }
   a.wikilink { color: var(--accent-text); cursor: pointer; text-decoration: underline; text-decoration-color: var(--accent-soft); text-underline-offset: 3px;
     &.missing { opacity: .6; text-decoration-style: dashed; text-decoration-color: currentColor; } }
   a.hashtag { color: var(--accent-text); background: var(--accent-soft); padding: 1px 7px; border-radius: 10px; font-size: .88em; cursor: pointer; text-decoration: none; }

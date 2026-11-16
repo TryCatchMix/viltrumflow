@@ -10,14 +10,16 @@ notas Markdown con `[[enlaces]]` al estilo Obsidian, vista de grafo y panel con 
 | Área | Qué incluye |
 | --- | --- |
 | **Notas** | Editor Markdown con resaltado, modos edición / dividido / lectura, autoguardado, carpetas, notas fijadas, nota diaria |
+| **Imágenes** | Pega, arrastra o elige una imagen en el editor (PNG, JPEG, GIF, WebP; 5 MB); son privadas y viajan en la exportación e importación |
 | **Enlaces** | `[[Nota]]`, `[[Nota\|alias]]`, autocompletado al escribir `[[`, enlaces entrantes con contexto, creación de la nota al abrir un enlace sin resolver, renombrar una nota actualiza los enlaces que apuntan a ella |
 | **Etiquetas** | `#etiqueta` y anidadas `#proyecto/web`, filtro por etiqueta |
 | **Grafo** | Notas, enlaces, notas sin crear y (opcional) etiquetas; zoom, arrastre, resaltado de vecinos y búsqueda |
+| **Captura rápida** | «Llamar a Juan mañana a las 10 #trabajo !alta @web cada semana» rellena fecha, hora, etiquetas, prioridad, proyecto y repetición |
 | **Tareas** | Alta rápida, subtareas, comentarios, prioridad, etiquetas, fecha con o sin hora, filtros y agrupación |
 | **Recurrentes** | Cada día, días laborables, cada semana, cada 2 semanas, cada mes o cada año: al completar una tarea se crea la siguiente |
 | **Recordatorios** | Aviso en el navegador antes del vencimiento y, con SMTP configurado, por email; resumen diario por la mañana |
 | **Importar / exportar** | Todas las notas como `.zip` de archivos `.md` (se abre como vault en Obsidian) e importación de un vault o de `.md` sueltos |
-| **Casillas de notas** | Los `- [ ]` escritos en cualquier nota aparecen en *Tareas → Casillas de notas* y se pueden marcar desde ahí |
+| **Casillas de notas** | Los `- [ ]` escritos en cualquier nota aparecen en *Tareas → Casillas de notas*, se marcan desde ahí y se pueden convertir en tareas enlazadas a la nota |
 | **Tablero** | Kanban con arrastrar y soltar; el orden se guarda |
 | **Calendario** | Vista mensual con tareas y eventos de Google Calendar |
 | **Panel** | Actividad diaria, carga pendiente, reparto por estado / prioridad y avance por proyecto |
@@ -146,7 +148,9 @@ En *Ajustes → Tus notas*:
 - **Importar** acepta un `.zip` (por ejemplo, tu carpeta de Obsidian comprimida) o archivos `.md`. El nombre del
   archivo es el título; se ignoran `.obsidian/`, `.trash/` y lo que no sea Markdown. El frontmatter YAML se conserva
   y sus `tags` se reconocen como etiquetas. Las notas que ya existen se omiten salvo que marques «Sobrescribir».
-- Límites: 50 MB por importación y 1 MB por nota. Los adjuntos (imágenes, PDF) no se importan.
+- Las imágenes viajan con las notas: la exportación las guarda en `adjuntos/` y la importación sube las que las
+  notas referencian, tanto `![](ruta)` como `![[imagen.png]]`.
+- Límites: 50 MB por importación, 1 MB por nota y 5 MB por imagen. Otros adjuntos (PDF, audio) no se importan.
 
 ## Migraciones de base de datos
 
@@ -175,7 +179,8 @@ cascada eliminaría filas relacionadas); añadir o quitar columnas funciona sin 
 
 En producción, el servicio `backup` guarda una copia de la base de datos al arrancar y después cada 24 horas en
 `BACKUP_DIR` (por defecto `./backups`), y conserva las de los últimos `BACKUP_KEEP_DAYS` días (14). Cada copia se
-verifica antes de darla por buena. **Las copias quedan en el mismo servidor**: cópialas además a otro sitio
+verifica antes de darla por buena. Junto a cada copia se guarda un `…-imagenes.tar.gz` con las imágenes de las notas,
+que viven en el volumen `uploads` y no en la base de datos. **Las copias quedan en el mismo servidor**: cópialas además a otro sitio
 (otro disco, almacenamiento en la nube) para que sobrevivan a un fallo de la máquina.
 
 ```bash

@@ -18,3 +18,7 @@ playwright-report/
 
 # Copias de seguridad locales
 backups/
+
+# Imágenes subidas
+uploads/
+e2e-uploads/

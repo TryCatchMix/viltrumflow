@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: Optional[str] = None
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/calendar/callback"
 
+    # Imágenes adjuntas a las notas: se guardan en disco, fuera de la base de datos
+    UPLOAD_DIR: str = "./uploads"
+    MAX_UPLOAD_MB: int = 5
+    USER_STORAGE_MB: int = 500
+
     # Email (opcional): recordatorios y resumen diario. Sin SMTP_HOST solo hay avisos en el navegador.
     SMTP_HOST: Optional[str] = None
     SMTP_PORT: int = 587

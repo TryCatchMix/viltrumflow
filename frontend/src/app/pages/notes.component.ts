@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
 import { ApiService } from '../core/api.service';
+import { AttachmentService } from '../core/attachment.service';
 import { OfflineService } from '../core/offline.service';
 import { Note, NoteSummary, TagCount, Task } from '../core/models';
 import { TaskDialogService } from '../shared/task-dialog.service';
@@ -82,6 +83,8 @@ type Mode = 'edit' | 'split' | 'preview';
             <button class="btn ghost icon sm hide-narrow" [class.active]="mode() === 'split'" title="Dividido" (click)="setMode('split')"><app-icon name="split" /></button>
             <button class="btn ghost icon sm" [class.active]="mode() === 'preview'" title="Lectura" (click)="setMode('preview')"><app-icon name="eye" /></button>
           </div>
+          <input #image type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden (change)="pickImages(image)" />
+          <button class="btn ghost icon sm" title="Insertar imagen (también puedes pegarla o arrastrarla)" (click)="image.click()"><app-icon name="image" /></button>
           <button class="btn ghost icon sm" [class.active]="n.is_pinned" [title]="n.is_pinned ? 'Desfijar' : 'Fijar'" (click)="pin()"><app-icon name="pin" /></button>
           <button class="btn ghost icon sm hide-narrow" [class.active]="side()" title="Panel de enlaces" (click)="toggleSide()"><app-icon name="panel" /></button>
           <button class="btn ghost icon sm danger" title="Eliminar nota" (click)="remove()"><app-icon name="trash" /></button>
@@ -95,7 +98,7 @@ type Mode = 'edit' | 'split' | 'preview';
         </div>
         <div class="panes" [class]="mode()">
           @if (mode() !== 'preview') {
-            <app-editor class="pane" [doc]="content()" [titles]="titleList()" (changed)="onEdit($event)" (save)="flush()" />
+            <app-editor class="pane" [doc]="content()" [titles]="titleList()" [upload]="uploadImage" (changed)="onEdit($event)" (save)="flush()" />
           }
           @if (mode() !== 'edit') {
             <div class="pane read" #reader>
@@ -199,6 +202,20 @@ export class NotesComponent implements OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private offline = inject(OfflineService);
+  private attachments = inject(AttachmentService);
+
+  /** Sube una imagen a la nota abierta; la usa el editor al pegar o arrastrar. */
+  uploadImage = async (file: File): Promise<string> => {
+    if (!this.attachments.isImage(file)) { this.toast.error('Solo se admiten imágenes PNG, JPEG, GIF o WebP'); throw new Error('tipo'); }
+    try { return await this.attachments.upload(file, this.note()?.id); }
+    catch (e) { this.toast.error(e, 'No se pudo subir la imagen'); throw e; }
+  };
+  pickImages(input: HTMLInputElement) {
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    if (this.mode() === 'preview') this.setMode('edit');
+    setTimeout(() => files.forEach(f => this.editor?.insertImage(f)), 50);
+  }
   @ViewChild(EditorComponent) editor?: EditorComponent;
   @ViewChild('reader') reader?: { nativeElement: HTMLElement };
   rel = relativeTime;

@@ -177,6 +177,8 @@ async def import_vault(
             raise HTTPException(400, str(exc))
     if not entries:
         raise HTTPException(400, "No se ha encontrado ninguna nota .md")
+    if not any(p.lower().endswith(".md") for p, _ in entries):
+        raise HTTPException(400, "No se ha encontrado ninguna nota .md")
     return vault.import_notes(db, user, entries, overwrite)
 
 

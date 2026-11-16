@@ -95,3 +95,30 @@ test('recuperar contraseña: páginas y validación del enlace', async ({ page }
   await expect(page.getByRole('alert')).toContainText('le falta el código');
   await expect(page.getByRole('button', { name: 'Guardar contraseña' })).toBeDisabled();
 });
+
+test('imágenes en notas: pegar en el editor y ver en la lectura', async ({ browser }) => {
+  const { page, api } = await register(browser);
+  await page.goto('/notes');
+  await openNote(page, 'Ideas');
+  await page.getByTitle('Dividido').click();
+
+  // PNG de 1×1 pegado desde el portapapeles
+  await page.locator('.cm-content').click();
+  await page.evaluate(() => {
+    const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='), c => c.charCodeAt(0));
+    const data = new DataTransfer();
+    data.items.add(new File([bytes], 'captura.png', { type: 'image/png' }));
+    document.querySelector('.cm-content')!.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await expect(page.locator('.cm-content')).toContainText('![captura](/api/v1/attachments/');
+  await expect(page.locator('.status')).toHaveText('Guardado');
+
+  // la vista de lectura la descarga con la sesión y la muestra como blob
+  const img = page.locator('.read img');
+  await expect(img).toHaveAttribute('src', /^blob:/);
+  await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBe(1);
+
+  // sin sesión la imagen no es accesible
+  const url = /\(\/api\/v1\/attachments\/[0-9a-f]{32}\)/.exec((await api('GET', '/notes/by-title/Ideas')).content)![0].slice(1, -1);
+  expect((await page.request.get(url)).status()).toBe(401);
+});
