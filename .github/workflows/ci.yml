@@ -103,3 +103,21 @@ jobs:
           test "$code" = "401" || { docker compose -f docker-compose.prod.yml logs; exit 1; }
           curl -fsS http://localhost:8080/ | grep -q "<app-root>"
           curl -fsS -o /dev/null http://localhost:8080/ngsw-worker.js
+      - name: Copia de seguridad y restauración
+        env:
+          DB_USER: viltrum
+          DB_PASSWORD: ci-password
+          DB_NAME: viltrumflow
+          SECRET_KEY: ci-secret-key-ci-secret-key-0123456789abcdef
+          PUBLIC_URL: http://localhost:8080
+          HTTP_PORT: "8080"
+        run: |
+          C="docker compose -f docker-compose.prod.yml"
+          curl -fsS -X POST http://localhost:8080/api/v1/auth/register -H 'Content-Type: application/json' \
+            -d '{"email":"ci@example.com","username":"ciuser","password":"Secreta123"}' >/dev/null
+          $C exec -T backup sh /usr/local/bin/backup.sh once
+          file=$($C exec -T backup sh -c 'ls -t /backups/viltrumflow-*.dump | head -1' | tr -d '\r')
+          # Se pierde el dato, se restaura la copia y el usuario vuelve a estar
+          $C exec -T db psql -U viltrum -d viltrumflow -c 'DELETE FROM users'
+          $C exec -T backup sh /usr/local/bin/backup.sh restore "$file"
+          test "$($C exec -T db psql -U viltrum -d viltrumflow -tAc "SELECT count(*) FROM users WHERE username='ciuser'" | tr -d '\r')" = "1"

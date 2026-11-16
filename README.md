@@ -162,6 +162,33 @@ alembic upgrade head                                       # también se ejecuta
 Revisa siempre la migración generada. En SQLite evita el modo «batch» (recrea la tabla y el borrado en
 cascada eliminaría filas relacionadas); añadir o quitar columnas funciona sin él.
 
+## Seguridad de las cuentas
+
+- **Límite de intentos**: tras 5 inicios de sesión fallidos de una misma IP para una cuenta (configurable con
+  `LOGIN_MAX_ATTEMPTS` y `LOGIN_WINDOW_MINUTES`), se bloquean más intentos durante 15 minutos. El contador vive en la
+  memoria del backend: con varias réplicas, cada una cuenta por separado.
+- **Recuperar contraseña**: «¿Has olvidado tu contraseña?» envía por email un enlace de un solo uso que caduca a los
+  30 minutos. Necesita SMTP configurado; sin él, la pantalla lo indica.
+- **Cierre de sesiones**: cambiar o restablecer la contraseña invalida todas las sesiones abiertas en otros dispositivos.
+
+## Copias de seguridad
+
+En producción, el servicio `backup` guarda una copia de la base de datos al arrancar y después cada 24 horas en
+`BACKUP_DIR` (por defecto `./backups`), y conserva las de los últimos `BACKUP_KEEP_DAYS` días (14). Cada copia se
+verifica antes de darla por buena. **Las copias quedan en el mismo servidor**: cópialas además a otro sitio
+(otro disco, almacenamiento en la nube) para que sobrevivan a un fallo de la máquina.
+
+```bash
+C="docker compose -f docker-compose.prod.yml"
+$C exec backup sh /usr/local/bin/backup.sh once      # copia inmediata
+ls backups/
+
+# Restaurar (sustituye el contenido actual de la base de datos)
+$C stop backend
+$C exec backup sh /usr/local/bin/backup.sh restore /backups/viltrumflow-AAAAMMDD-HHMMSS.dump
+$C start backend
+```
+
 ## Producción
 
 ```bash
