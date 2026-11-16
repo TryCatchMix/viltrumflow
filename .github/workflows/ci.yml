@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: viltrum
+          POSTGRES_PASSWORD: viltrum
+          POSTGRES_DB: viltrumflow_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U viltrum" --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Tests (SQLite)
+        run: pytest -q
+      - name: Tests (PostgreSQL)
+        run: pytest -q
+        env:
+          TEST_DATABASE_URL: postgresql://viltrum:viltrum@localhost:5432/viltrumflow_test
+
+  e2e:
+    name: Frontend (build + Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r backend/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Build de producción y pruebas de navegador
+        run: npm run e2e
+        working-directory: frontend
+        env:
+          E2E_PYTHON: python
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results
+          path: frontend/test-results
+          retention-days: 7
+
+  docker:
+    name: Imágenes Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir imágenes de desarrollo
+        run: docker compose build
+      - name: Construir y arrancar producción
+        env:
+          DB_USER: viltrum
+          DB_PASSWORD: ci-password
+          DB_NAME: viltrumflow
+          SECRET_KEY: ci-secret-key-ci-secret-key-0123456789abcdef
+          PUBLIC_URL: http://localhost:8080
+          HTTP_PORT: "8080"
+        run: |
+          docker compose -f docker-compose.prod.yml up -d --build
+          # La web responde y el proxy llega al backend (401 = API viva, sin sesión)
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/v1/auth/me || true)
+            [ "$code" = "401" ] && break
+            sleep 2
+          done
+          docker compose -f docker-compose.prod.yml ps
+          test "$code" = "401" || { docker compose -f docker-compose.prod.yml logs; exit 1; }
+          curl -fsS http://localhost:8080/ | grep -q "<app-root>"
+          curl -fsS -o /dev/null http://localhost:8080/ngsw-worker.js

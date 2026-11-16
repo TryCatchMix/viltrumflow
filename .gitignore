@@ -11,3 +11,7 @@ node_modules/
 dist/
 .angular/
 .DS_Store
+
+# Playwright
+test-results/
+playwright-report/

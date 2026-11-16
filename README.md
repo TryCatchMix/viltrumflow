@@ -61,6 +61,17 @@ cd backend && pytest
 TEST_DATABASE_URL=postgresql://usuario:clave@localhost:5432/viltrumflow_test pytest
 ```
 
+Pruebas de navegador (Playwright), contra la build de producción. Arrancan solas el backend y la app:
+
+```bash
+cd frontend
+npx playwright install chromium   # solo la primera vez
+npm run e2e                       # compila y ejecuta; `npm run e2e:only` reutiliza la build
+```
+
+Cada push y cada pull request ejecutan en GitHub Actions los tests del backend (SQLite y PostgreSQL), las
+pruebas de navegador y la construcción y arranque de las imágenes Docker (`.github/workflows/ci.yml`).
+
 ## Google Calendar
 
 La integración es opcional; sin configurar, el resto de la aplicación funciona igual.
