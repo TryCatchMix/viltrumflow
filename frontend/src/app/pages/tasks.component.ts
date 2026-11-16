@@ -6,6 +6,8 @@ import { ApiService } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
 import { BOARD_STATUSES, ChecklistItem, PRIORITIES, PRIORITY_LABEL, RECURRENCE_LABEL, Priority, Project, STATUS_LABEL, Status, Task } from '../core/models';
 import { ToastService } from '../core/toast.service';
+import { hasMetadata } from '../core/quick-parse';
+import { quickToTask } from '../core/quick-task';
 import { addDays, formatDay, isOverdue, taskDay, taskTime, today } from '../core/util';
 import { IconComponent } from '../shared/icon.component';
 import { TaskDialogService } from '../shared/task-dialog.service';
@@ -33,8 +35,19 @@ type Due = '' | 'overdue' | 'today' | 'week' | 'none';
     @if (tab() === 'tasks') {
       <form class="quick row" (ngSubmit)="quickAdd()">
         <app-icon name="plus" />
-        <input name="quick" [(ngModel)]="quick" placeholder="Añadir tarea rápida y pulsar Intro" maxlength="200" aria-label="Añadir tarea rápida" />
+        <input name="quick" [(ngModel)]="quick" (ngModelChange)="onQuick($event)" maxlength="200" aria-label="Añadir tarea rápida"
+          placeholder="Añadir tarea: «Llamar a Juan mañana a las 10 #trabajo !alta»" />
       </form>
+      @if (preview(); as q) {
+        <div class="preview row" aria-live="polite">
+          <span class="muted">Se creará:</span><strong class="truncate">{{ q.input.title }}</strong>
+          @if (q.parsed.day) { <span class="chip"><app-icon name="calendar" [size]="11" />{{ fmt(q.parsed.day) }} {{ q.parsed.time ?? '' }}</span> }
+          @if (q.parsed.recurrence; as r) { <span class="chip"><app-icon name="repeat" [size]="11" />{{ rec[r] }}</span> }
+          @if (q.parsed.priority; as pr) { <span class="prio" [class]="pr">{{ priorityLabel[pr] }}</span> }
+          @if (q.project; as pj) { <span class="chip"><i class="dot" [style.background]="pj.color"></i>{{ pj.name }}</span> }
+          @for (tag of q.parsed.tags; track tag) { <span class="chip tag">#{{ tag }}</span> }
+        </div>
+      }
 
       <div class="filters row">
         <input class="input search" [ngModel]="q()" (ngModelChange)="q.set($event)" placeholder="Filtrar…" aria-label="Filtrar tareas" />
@@ -95,15 +108,20 @@ type Due = '' | 'overdue' | 'today' | 'week' | 'none';
         }
       }
     } @else {
-      <p class="muted intro">Las casillas <code>- [ ]</code> que escribes en tus notas aparecen aquí. Al marcarlas se actualiza la nota.</p>
+      <p class="muted intro">Las casillas <code>- [ ]</code> que escribes en tus notas aparecen aquí. Al marcarlas se actualiza la nota. Si una necesita fecha, prioridad o proyecto, conviértela en tarea.</p>
       @for (g of checkGroups(); track g.id) {
         <h3 class="group"><a [routerLink]="['/notes', g.id]">{{ g.title }}</a> <span class="muted">{{ g.pending }} pendientes</span></h3>
         <div class="card list">
           @for (c of g.items; track c.line) {
-            <label class="task row" [class.done]="c.checked">
-              <input type="checkbox" class="check square" [checked]="c.checked" (change)="toggleCheck(c)" />
-              <span class="title">{{ c.text }}</span>
-            </label>
+            <div class="task row" [class.done]="c.checked">
+              <label class="row" style="flex:1;min-width:0;cursor:pointer">
+                <input type="checkbox" class="check square" [checked]="c.checked" (change)="toggleCheck(c)" />
+                <span class="title">{{ c.text }}</span>
+              </label>
+              @if (!c.checked) {
+                <button class="btn ghost sm convert" title="Convertirla en una tarea con fecha, prioridad y proyecto" (click)="convert(c)"><app-icon name="check" [size]="13" /> Convertir en tarea</button>
+              }
+            </div>
           }
         </div>
       } @empty {
@@ -117,6 +135,8 @@ type Due = '' | 'overdue' | 'today' | 'week' | 'none';
       input { flex: 1; border: none; background: none; outline: none; height: 100%; color: var(--text); } }
     .mine { font-size: 13px; color: var(--text-2); white-space: nowrap; cursor: pointer; }
     .check:disabled { opacity: .4; cursor: not-allowed; }
+    .preview { font-size: 13px; margin: -6px 0 12px; padding: 0 12px; flex-wrap: wrap; row-gap: 4px; strong { font-weight: 500; max-width: 40%; } }
+    .convert { opacity: 0; } .task:hover .convert, .convert:focus-visible { opacity: 1; }
     .filters { flex-wrap: wrap; margin-bottom: 8px; .input { width: auto; flex: 0 1 auto; } .search { flex: 1 1 160px; } }
     .group { margin: 18px 0 8px; display: flex; gap: 8px; align-items: baseline; font-size: 13px; color: var(--text-2); .muted { font-weight: 400; } }
     .list { overflow: hidden; }
@@ -147,6 +167,13 @@ export class TasksComponent implements OnInit {
   checks = signal<ChecklistItem[]>([]);
   loaded = signal(false);
   quick = '';
+  private quickText = signal('');
+  /** Se recalcula también cuando terminan de cargar los proyectos (para resolver «@proyecto»). */
+  preview = computed(() => {
+    const text = this.quickText().trim();
+    const q = text ? quickToTask(text, this.projects()) : null;
+    return q && hasMetadata(q.parsed) ? q : null;
+  });
 
   q = signal('');
   status = signal<Status | 'open' | ''>('open');
@@ -237,11 +264,15 @@ export class TasksComponent implements OnInit {
     });
   }
 
+  onQuick(text: string) { this.quickText.set(text); }
+
   quickAdd() {
-    const title = this.quick.trim();
-    if (!title) return;
+    const text = this.quick.trim();
+    if (!text) return;
+    const { input } = quickToTask(text, this.projects());
     this.quick = '';
-    this.api.createTask({ title, project_id: this.project() }).subscribe({ error: e => { this.quick = title; this.toast.error(e); } });
+    this.quickText.set('');
+    this.api.createTask({ project_id: this.project(), ...input }).subscribe({ error: e => { this.quick = text; this.onQuick(text); this.toast.error(e); } });
   }
 
   toggle(t: Task) {
@@ -257,6 +288,18 @@ export class TasksComponent implements OnInit {
     const checked = !c.checked;
     this.checks.update(l => l.map(x => (x.note_id === c.note_id && x.line === c.line ? { ...x, checked } : x)));
     this.api.toggleChecklist(c.note_id, c.line, checked).subscribe({
+      error: e => { this.toast.error(e, 'La nota ha cambiado; se ha recargado la lista'); this.api.checklist().subscribe(x => this.checks.set(x)); },
+    });
+  }
+
+  /** La casilla pasa a ser una tarea real enlazada a su nota; el texto admite la misma sintaxis que la captura rápida. */
+  convert(c: ChecklistItem) {
+    const { input } = quickToTask(c.text, this.projects());
+    this.api.convertChecklist(c.note_id, c.line, input).subscribe({
+      next: t => {
+        this.checks.update(l => l.filter(x => !(x.note_id === c.note_id && x.line === c.line)));
+        this.toast.success(`Tarea creada: ${t.title}`);
+      },
       error: e => { this.toast.error(e, 'La nota ha cambiado; se ha recargado la lista'); this.api.checklist().subscribe(x => this.checks.set(x)); },
     });
   }

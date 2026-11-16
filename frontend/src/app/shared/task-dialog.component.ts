@@ -1,5 +1,6 @@
 import { Component, HostListener, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { ApiService } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
 import { Comment, Member, PRIORITIES, PRIORITY_LABEL, Priority, Project, RECURRENCE_LABEL, REMINDER_OPTIONS, Recurrence, STATUS_LABEL, Status, Subtask, Task } from '../core/models';
@@ -11,7 +12,7 @@ import { TaskDialogService } from './task-dialog.service';
 @Component({
   selector: 'app-task-dialog',
   standalone: true,
-  imports: [FormsModule, IconComponent],
+  imports: [FormsModule, RouterLink, IconComponent],
   template: `
   @if (svc.state(); as st) {
     <div class="scrim" (click)="svc.close()"></div>
@@ -96,6 +97,9 @@ import { TaskDialogService } from './task-dialog.service';
       @if (task) {
         <section>
           <h3>Subtareas @if (subtasks().length) { <span class="muted">{{ doneCount() }}/{{ subtasks().length }}</span> }</h3>
+          @if (task.note_title) {
+            <a class="from row" [routerLink]="['/notes', task.note_id]" (click)="svc.close()"><app-icon name="note" [size]="13" /> Viene de la nota «{{ task.note_title }}»</a>
+          }
           @if (task.user_id !== me() || task.assignee_name) {
             <p class="muted by">Creada por {{ task.owner_name }}@if (task.assignee_name) { · Responsable: {{ task.assignee_name }} }</p>
           }
@@ -138,6 +142,7 @@ import { TaskDialogService } from './task-dialog.service';
     .body fieldset { display: grid; gap: 12px; border: none; padding: 0; margin: 0; min-width: 0; }
     .ro { display: flex; gap: 8px; align-items: center; font-size: 13px; background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 10px; color: var(--text-2); }
     .by { font-size: 12px; margin-top: -4px; }
+    .from { font-size: 13px; gap: 6px; }
     .title { height: 38px; font-size: 16px; font-weight: 500; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     section { display: grid; gap: 8px; border-top: 1px solid var(--border); padding-top: 16px; }

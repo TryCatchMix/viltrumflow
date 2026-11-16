@@ -235,6 +235,26 @@ def toggle_checklist(note_id: int, data: schemas.ChecklistToggle, user: User = D
     return _detail(db, note)
 
 
+@router.post("/{note_id}/checklist/convert", response_model=schemas.TaskOut, status_code=201)
+def convert_checklist(note_id: int, data: schemas.ChecklistConvert, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Convierte una casilla de la nota en una tarea real enlazada a ella; la casilla pasa a ser una viñeta."""
+    from . import tasks as tasks_router
+
+    note = _get(db, user, note_id)
+    try:
+        content, text = md.convert_checkbox(note.content, data.line)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+    task = tasks_router.create_task(
+        schemas.TaskCreate(title=(data.title or text)[:200], due_date=data.due_date, all_day=data.all_day,
+                           priority=data.priority, tags=data.tags, project_id=data.project_id, note_id=note.id),
+        user, db,
+    )
+    note.content = content
+    db.commit()
+    return task
+
+
 @router.delete("/{note_id}", status_code=204)
 def delete_note(note_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Envía la nota a la papelera (se puede restaurar durante 30 días)."""

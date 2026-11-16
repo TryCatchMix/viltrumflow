@@ -63,3 +63,19 @@ def test_checklist_and_daily(client, auth):
     d1 = client.post(f"{N}/daily", headers=auth, params={"day": "2026-05-01"}).json()
     d2 = client.post(f"{N}/daily", headers=auth, params={"day": "2026-05-01"}).json()
     assert d1["id"] == d2["id"] and d1["is_daily"] and d1["folder"] == "Diario" and d1["title"] == "2026-05-01"
+
+
+def test_convert_checkbox_into_task(client, auth):
+    n = client.post(N, headers=auth, json={"title": "Plan", "content": "Intro\n  - [ ] Llamar a Juan\n- [x] hecho\n```\n- [ ] código\n```"}).json()
+    r = client.post(f"{N}/{n['id']}/checklist/convert", headers=auth, json={"line": 1, "due_date": "2030-01-02T00:00:00Z", "tags": ["tel"]})
+    assert r.status_code == 201, r.text
+    t = r.json()
+    assert t["title"] == "Llamar a Juan" and t["note_id"] == n["id"] and t["note_title"] == "Plan" and t["due_date"].startswith("2030-01-02")
+    content = client.get(f"{N}/{n['id']}", headers=auth).json()["content"]
+    assert content.split("\n")[1] == "  - Llamar a Juan *(convertida en tarea)*"
+    # ya no aparece como casilla, y la tarea se lista por nota
+    assert [i["text"] for i in client.get(f"{N}/checklist", headers=auth).json() if i["note_id"] == n["id"]] == ["hecho"]
+    assert [x["id"] for x in client.get("/api/v1/tasks", headers=auth, params={"note_id": n["id"]}).json()] == [t["id"]]
+    # líneas que no son casillas (texto, o dentro de código)
+    for line in (0, 4, 99):
+        assert client.post(f"{N}/{n['id']}/checklist/convert", headers=auth, json={"line": line}).status_code == 409

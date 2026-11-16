@@ -5,7 +5,8 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
 import { ApiService } from '../core/api.service';
 import { OfflineService } from '../core/offline.service';
-import { Note, NoteSummary, TagCount } from '../core/models';
+import { Note, NoteSummary, TagCount, Task } from '../core/models';
+import { TaskDialogService } from '../shared/task-dialog.service';
 import { ToastService } from '../core/toast.service';
 import { isOffline, relativeTime, today } from '../core/util';
 import { EditorComponent } from '../shared/editor.component';
@@ -130,6 +131,15 @@ type Mode = 'edit' | 'split' | 'preview';
           </button>
         } @empty { <p class="muted">Sin enlaces. Escribe <code>[[</code> para crear uno.</p> }
 
+        @if (linked().length) {
+          <h4>Tareas de esta nota <span class="muted">{{ linked().length }}</span></h4>
+          @for (t of linked(); track t.id) {
+            <button class="out row" [class.done]="t.status === 'completed'" (click)="dialog.edit(t)">
+              <app-icon name="check" [size]="13" /><span class="truncate">{{ t.title }}</span>
+            </button>
+          }
+        }
+
         <h4>Esquema</h4>
         @for (h of outline(); track h.line) {
           <button class="out truncate" [style.padding-left.px]="6 + (h.level - 1) * 12" (click)="goTo(h.line, $index)">{{ h.text }}</button>
@@ -170,6 +180,7 @@ type Mode = 'edit' | 'split' | 'preview';
       h4 { margin-left: 4px; } p { padding: 0 4px; } }
     .back { display: grid; gap: 2px; padding: 7px 8px; border-radius: var(--radius-sm); color: var(--text); background: var(--surface-2); margin-bottom: 6px; &:hover { text-decoration: none; background: var(--surface-3); }
       small { color: var(--text-3); overflow-wrap: anywhere; } }
+    .out.done { text-decoration: line-through; opacity: .6; }
     .out { display: flex; width: 100%; background: none; border: none; text-align: left; padding: 4px 6px; border-radius: var(--radius-sm); color: var(--text-2); gap: 6px; &:hover { background: var(--surface-2); color: var(--text); } &.ghost { opacity: .6; } }
     .graph-link { margin: 18px 4px 0; }
     .only-narrow { display: none; }
@@ -195,6 +206,8 @@ export class NotesComponent implements OnDestroy {
   list = signal<NoteSummary[]>([]);
   tags = signal<TagCount[]>([]);
   results = signal<NoteSummary[]>([]);
+  linked = signal<Task[]>([]);
+  dialog = inject(TaskDialogService);
   note = signal<Note | null>(null);
   content = signal('');
   loading = signal(true);
@@ -231,6 +244,7 @@ export class NotesComponent implements OnDestroy {
 
   constructor() {
     this.loadList(true);
+    this.api.tasksChanged.pipe(takeUntilDestroyed()).subscribe(() => { const n = this.note(); if (n) this.loadLinked(n.id); });
     addEventListener('online', this.onOnline);
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe(p => {
       const id = Number(p.get('id'));
@@ -298,7 +312,10 @@ export class NotesComponent implements OnDestroy {
     });
   }
 
-  private apply(n: Note) { this.offline.activeId = n.id; this.note.set(n); this.title = n.title; this.folder = n.folder; }
+  private loadLinked(id: number) {
+    if (id > 0) this.api.tasks({ note_id: id, include_archived: true }).subscribe({ next: t => this.linked.set(t), error: () => this.linked.set([]) });
+  }
+  private apply(n: Note) { if (this.note()?.id !== n.id) { this.linked.set([]); this.loadLinked(n.id); } this.offline.activeId = n.id; this.note.set(n); this.title = n.title; this.folder = n.folder; }
 
   // ---- Edición y guardado automático ----
   onEdit(text: string) {

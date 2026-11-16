@@ -219,6 +219,7 @@ class TaskOut(ORM):
     recurrence: str = "none"
     reminder_minutes: Optional[int] = None
     user_id: int
+    note_title: Optional[str] = None  # solo para quien es dueño de la nota
     owner_name: str = ""
     assignee_id: Optional[int] = None
     assignee_name: Optional[str] = None
@@ -349,6 +350,16 @@ class ChecklistItem(BaseModel):
 class ChecklistToggle(BaseModel):
     line: int = Field(ge=0)
     checked: bool
+
+
+class ChecklistConvert(BaseModel):
+    line: int = Field(ge=0)
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    due_date: Optional[datetime] = None
+    all_day: bool = True
+    priority: Priority = Priority.MEDIUM
+    tags: List[str] = []
+    project_id: Optional[int] = None
 
 
 class SearchResult(BaseModel):

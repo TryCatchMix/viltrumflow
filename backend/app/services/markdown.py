@@ -93,6 +93,18 @@ def toggle_checkbox(content: str, line: int, checked: bool) -> str:
     return "\n".join(lines)
 
 
+def convert_checkbox(content: str, line: int) -> Tuple[str, str]:
+    """Sustituye la casilla de esa línea por una viñeta normal y devuelve (contenido, texto de la casilla)."""
+    lines = content.split("\n")
+    m = CHECKBOX.match(lines[line]) if line < len(lines) else None
+    if not m or line not in [i for i, _, _ in extract_checklist(content)]:
+        raise ValueError("La línea indicada no es una casilla")
+    text = m.group(4).strip()
+    indent = m.group(1)[: len(m.group(1)) - len(m.group(1).lstrip())]
+    lines[line] = f"{indent}- {text} *(convertida en tarea)*"
+    return "\n".join(lines), text
+
+
 def rename_links(content: str, old: str, new: str) -> str:
     """Reescribe [[old]] → [[new]] conservando #sección y |alias."""
     old_l = old.lower()

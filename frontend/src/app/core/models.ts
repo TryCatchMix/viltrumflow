@@ -44,7 +44,7 @@ export interface Task {
   due_date?: string | null; all_day: boolean; completed_at?: string | null; estimated_hours?: number | null;
   tags: string[]; position: number; project_id?: number | null; parent_task_id?: number | null;
   note_id?: number | null; google_event_id?: string | null; recurrence: Recurrence; reminder_minutes?: number | null;
-  user_id: number; owner_name: string; assignee_id?: number | null; assignee_name?: string | null; can_edit: boolean;
+  user_id: number; note_title?: string | null; owner_name: string; assignee_id?: number | null; assignee_name?: string | null; can_edit: boolean;
   created_at: string; updated_at: string; subtasks: Subtask[];
 }
 export type TaskInput = Partial<Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'due_date' | 'all_day'

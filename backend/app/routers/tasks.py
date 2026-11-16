@@ -27,6 +27,10 @@ def _out(db: Session, user: User, task: Task, roles: Optional[Dict[int, str]] = 
     o.owner_name = display_name(task.owner)
     o.assignee_name = display_name(task.assignee) or None
     o.can_edit = access.can_edit(db, user, task, roles)
+    if task.note_id and task.note and task.note.owner_id == user.id and task.note.deleted_at is None:
+        o.note_title = task.note.title
+    else:
+        o.note_id = None  # las notas son privadas: no se expone ni su id a otros miembros
     return o
 
 
@@ -116,6 +120,7 @@ def list_tasks(
     due_from: Optional[datetime] = None,
     due_to: Optional[datetime] = None,
     assigned_to_me: bool = False,
+    note_id: Optional[int] = None,
     include_archived: bool = False,
     skip: int = Query(0, ge=0),
     limit: int = Query(500, ge=1, le=1000),
@@ -135,6 +140,8 @@ def list_tasks(
         query = query.filter(Task.priority == priority)
     if project_id is not None:
         query = query.filter(Task.project_id == project_id)
+    if note_id is not None:
+        query = query.filter(Task.note_id == note_id, Task.user_id == user.id)
     if assigned_to_me:
         query = query.filter(Task.assignee_id == user.id)
     if q:

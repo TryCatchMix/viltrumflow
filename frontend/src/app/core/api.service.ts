@@ -90,6 +90,10 @@ export class ApiService {
   pollReminders() { return this.http.post<Reminder[]>(`${this.base}/reminders/poll`, null); }
   notificationStatus() { return this.http.get<{ email_configured: boolean }>(`${this.base}/reminders/status`); }
 
+  convertChecklist(noteId: number, line: number, extra: TaskInput = {}) {
+    return this.t(this.n(this.http.post<Task>(`${this.base}/notes/${noteId}/checklist/convert`, { line, ...extra })));
+  }
+
   // Estadísticas y búsqueda
   overview(days: number) {
     return this.http.get<Overview>(`${this.base}/stats/overview`, { params: params({ days, tz_offset: -new Date().getTimezoneOffset() }) });
