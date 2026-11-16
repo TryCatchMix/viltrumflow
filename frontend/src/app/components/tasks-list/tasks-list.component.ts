@@ -731,28 +731,53 @@ import { TaskService } from '../../services/task.service';
 })
 export class TasksListComponent implements OnInit {
   tasks: Task[] = [];
+  filteredTasks: Task[] = [];
+  projects: Project[] = [];
   filterStatus: Status | null = null;
   filterPriority: Priority | null = null;
+  filterProject: number | null = null;
   showCreateModal = false;
+  showFilters = false;
   editingTask: Task | null = null;
 
-  taskForm = {
+  searchTerm = '';
+  searchSubject = new Subject<string>();
+  sortBy: 'created' | 'due_date' | 'priority' | 'title' = 'created';
+  sortOrder: 'asc' | 'desc' = 'desc';
+
+  taskForm: {
+    title: string;
+    description: string;
+    status: Status;
+    priority: Priority;
+    due_date: string;
+    project_id: number | null;
+  } = {
     title: '',
     description: '',
     status: Status.TODO,
     priority: Priority.MEDIUM,
-    due_date: ''
+    due_date: '',
+    project_id: null
   };
 
   selectedProjectId: number | null = null;
 
   constructor(
     private taskService: TaskService,
+    private projectService: ProjectService,
     private route: ActivatedRoute,
     private notificationService: NotificationService
   ) {}
 
   ngOnInit(): void {
+    this.searchSubject.pipe(debounceTime(300)).subscribe(() => this.performSearch());
+
+    this.projectService.getProjects().subscribe({
+      next: (projects) => this.projects = projects,
+      error: (error) => console.error('Error loading projects:', error)
+    });
+
     // Obtener project_id de query params si existe
     this.route.queryParams.subscribe(params => {
       if (params['project']) {
@@ -871,7 +896,8 @@ export class TasksListComponent implements OnInit {
 
     const taskData = {
       ...this.taskForm,
-      due_date: this.taskForm.due_date || undefined
+      due_date: this.taskForm.due_date || undefined,
+      project_id: this.taskForm.project_id ?? undefined
     };
 
     if (this.editingTask) {
