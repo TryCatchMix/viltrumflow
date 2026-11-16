@@ -1,96 +1,87 @@
-from sqlalchemy import create_engine, event, text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import QueuePool
-from typing import Generator
 import logging
+from typing import Generator
+
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
 from .config import settings
 
 logger = logging.getLogger(__name__)
 
-# Configuración del engine con pool de conexiones
-engine = create_engine(
-    settings.DATABASE_URL,
-    poolclass=QueuePool,
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,  # Verifica conexiones antes de usarlas
-    pool_recycle=3600,   # Recicla conexiones cada hora
-    echo=settings.DB_ECHO,
-    connect_args={
-        "connect_timeout": 10,
-        "keepalives": 1,
-        "keepalives_idle": 30,
-        "keepalives_interval": 10,
-        "keepalives_count": 5,
-    }
-)
+DATABASE_URL = settings.DATABASE_URL
+if DATABASE_URL.startswith(("postgresql://", "postgres://")):
+    # Driver explícito: el predeterminado de SQLAlchemy para "postgresql://" depende de la versión
+    DATABASE_URL = "postgresql+psycopg2://" + DATABASE_URL.split("://", 1)[1]
+_is_sqlite = DATABASE_URL.startswith("sqlite")
 
-# SessionLocal class
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
+if _is_sqlite:
+    _kwargs = {"connect_args": {"check_same_thread": False}}
+    if DATABASE_URL in ("sqlite://", "sqlite:///:memory:"):
+        _kwargs["poolclass"] = StaticPool
+    engine = create_engine(DATABASE_URL, echo=settings.DB_ECHO, **_kwargs)
 
-# Base class for models
-Base = declarative_base()
+    @event.listens_for(engine, "connect")
+    def _sqlite_fk(dbapi_conn, _record):  # SQLite ignora las FK si no se activa
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA foreign_keys=ON")
+        cur.close()
+else:
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+        echo=settings.DB_ECHO,
+    )
 
-
-# Event listeners para logging
-@event.listens_for(engine, "connect")
-def receive_connect(dbapi_conn, connection_record):
-    """Log cuando se establece una nueva conexión"""
-    logger.debug("Database connection established")
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-@event.listens_for(engine, "checkout")
-def receive_checkout(dbapi_conn, connection_record, connection_proxy):
-    """Log cuando se obtiene una conexión del pool"""
-    logger.debug("Connection checked out from pool")
+class Base(DeclarativeBase):
+    pass
 
 
-# Dependency para obtener sesión de DB
 def get_db() -> Generator[Session, None, None]:
-    """
-    Dependency que proporciona una sesión de base de datos.
-    Se asegura de cerrar la sesión después de cada request.
-    """
     db = SessionLocal()
     try:
         yield db
-    except Exception as e:
-        logger.error(f"Database session error: {str(e)}")
+    except Exception:
         db.rollback()
         raise
     finally:
         db.close()
 
 
-# Función para inicializar la base de datos
+BASELINE = "0001"  # esquema de la versión 2.0, anterior a las migraciones
+
+
 def init_db() -> None:
-    """
-    Crea todas las tablas en la base de datos.
-    Solo usar en desarrollo. En producción usar Alembic.
-    """
-    try:
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database tables created successfully")
-    except Exception as e:
-        logger.error(f"Error creating database tables: {str(e)}")
-        raise
+    """Lleva el esquema a la última versión con Alembic (se ejecuta al arrancar)."""
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import inspect
+
+    root = Path(__file__).resolve().parent.parent
+    cfg = Config(str(root / "alembic.ini"))
+    cfg.set_main_option("script_location", str(root / "migrations"))
+    with engine.begin() as conn:
+        cfg.attributes["connection"] = conn
+        tables = set(inspect(conn).get_table_names())
+        if "users" in tables and "alembic_version" not in tables:
+            # Base creada con create_all antes de existir las migraciones: se marca como línea base
+            command.stamp(cfg, BASELINE)
+        command.upgrade(cfg, "head")
 
 
-# Función para verificar la conexión
 def check_db_connection() -> bool:
-    """
-    Verifica que la conexión a la base de datos funcione correctamente.
-    """
     try:
-        with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
-        logger.info("Database connection check successful")
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
         return True
-    except Exception as e:
-        logger.error(f"Database connection check failed: {str(e)}")
+    except Exception as exc:  # pragma: no cover
+        logger.error("Database connection check failed: %s", exc)
         return False
