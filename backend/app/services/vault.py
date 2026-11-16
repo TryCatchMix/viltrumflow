@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from .. import schemas
 from ..models import Note, User
-from .notes import find_by_title, resolve_dangling, sync_note_index
+from .notes import find_by_title, free_title, resolve_dangling, sync_note_index
 
 MAX_FILES = 5000
 MAX_NOTE_BYTES = 1_000_000
@@ -92,6 +92,7 @@ def import_notes(db: Session, user: User, files: List[Tuple[str, bytes]], overwr
             note.content, note.folder = content, folder
             res.updated += 1
         else:
+            free_title(db, user.id, title)
             note = Note(title=title, content=content, folder=folder, owner_id=user.id)
             db.add(note)
             res.created += 1

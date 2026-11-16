@@ -123,6 +123,25 @@ class ProjectOut(ORM):
     updated_at: datetime
     total_tasks: int = 0
     completed_tasks: int = 0
+    role: Literal["owner", "editor", "viewer"] = "owner"
+    owner_name: str = ""
+    member_count: int = 0  # personas con acceso además del propietario
+
+
+class MemberInvite(BaseModel):
+    identifier: str = Field(min_length=3, max_length=255, description="Nombre de usuario o email exactos")
+    role: Literal["editor", "viewer"] = "editor"
+
+
+class MemberUpdate(BaseModel):
+    role: Literal["editor", "viewer"]
+
+
+class MemberOut(BaseModel):
+    user_id: int
+    username: str
+    name: str
+    role: Literal["owner", "editor", "viewer"]
 
 
 # ---------- Tareas ----------
@@ -140,6 +159,7 @@ class TaskCreate(BaseModel):
     note_id: Optional[int] = None
     recurrence: Recurrence = "none"
     reminder_minutes: Optional[int] = Field(None, ge=0, le=40320)
+    assignee_id: Optional[int] = None
 
 
 class TaskUpdate(BaseModel):
@@ -155,6 +175,7 @@ class TaskUpdate(BaseModel):
     note_id: Optional[int] = None
     recurrence: Optional[Recurrence] = None
     reminder_minutes: Optional[int] = Field(None, ge=0, le=40320)
+    assignee_id: Optional[int] = None
 
 
 class TaskMove(BaseModel):
@@ -186,6 +207,11 @@ class TaskOut(ORM):
     google_event_id: Optional[str] = None
     recurrence: str = "none"
     reminder_minutes: Optional[int] = None
+    user_id: int
+    owner_name: str = ""
+    assignee_id: Optional[int] = None
+    assignee_name: Optional[str] = None
+    can_edit: bool = True
     created_at: datetime
     updated_at: datetime
     subtasks: List[SubtaskOut] = []
@@ -330,10 +356,22 @@ class ImportResult(BaseModel):
 
 # ---------- Recordatorios ----------
 class ReminderOut(BaseModel):
+    kind: Literal["reminder", "assigned"] = "reminder"
     task_id: int
     title: str
-    due_date: datetime
-    all_day: bool
+    due_date: Optional[datetime] = None
+    all_day: bool = True
+    by: Optional[str] = None  # quién asignó la tarea
+
+
+# ---------- Papelera ----------
+class TrashItem(BaseModel):
+    kind: Literal["note", "task"]
+    id: int
+    title: str
+    detail: Optional[str] = None
+    deleted_at: datetime
+    purge_at: datetime
 
 
 class NotificationStatus(BaseModel):

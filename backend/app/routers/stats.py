@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..deps import get_current_user
 from ..models import Note, NoteLink, Priority, Project, Status, Task, User
+from ..services import access
 
 router = APIRouter()
 
@@ -59,7 +60,11 @@ def overview(
 ):
     offset = timedelta(minutes=tz_offset)
     today = (datetime.now(timezone.utc) + offset).date()
-    tasks = db.query(Task).filter(Task.user_id == user.id, Task.parent_task_id.is_(None)).all()
+    roles = access.project_roles(db, user)
+    tasks = db.query(Task).filter(
+        access.visible_tasks(db, user, roles), access.responsible(user),
+        Task.parent_task_id.is_(None), Task.deleted_at.is_(None),
+    ).all()
     live = [t for t in tasks if t.status != Status.ARCHIVED]
     open_ = [t for t in live if t.status != Status.COMPLETED]
 
@@ -86,8 +91,11 @@ def overview(
         timeline.append(DayPoint(date=d.isoformat(), created=created_c[d], completed=done_c[d], open=max(open_count, 0)))
 
     projects = []
-    for p in db.query(Project).filter(Project.owner_id == user.id, Project.is_archived.is_(False)).order_by(Project.name):
-        mine = [t for t in live if t.project_id == p.id]
+    all_live = db.query(Task.project_id, Task.status).filter(
+        Task.project_id.in_(roles.keys() or [-1]), Task.parent_task_id.is_(None), Task.deleted_at.is_(None), Task.status != Status.ARCHIVED,
+    ).all()
+    for p in db.query(Project).filter(Project.id.in_(roles.keys() or [-1]), Project.is_archived.is_(False)).order_by(Project.name):
+        mine = [t for t in all_live if t.project_id == p.id]  # el avance del proyecto cuenta las tareas de todos
         projects.append(ProjectStat(id=p.id, name=p.name, color=p.color, total=len(mine),
                                     completed=sum(1 for t in mine if t.status == Status.COMPLETED)))
 
@@ -95,7 +103,7 @@ def overview(
     for t in live:
         tag_c.update(filter(None, t.tags.split(",")))
 
-    note_ids = [i for (i,) in db.query(Note.id).filter(Note.owner_id == user.id)]
+    note_ids = [i for (i,) in db.query(Note.id).filter(Note.owner_id == user.id, Note.deleted_at.is_(None))]
     links = db.query(NoteLink).filter(NoteLink.source_id.in_(note_ids)).count() if note_ids else 0
     completed = by_status[Status.COMPLETED.value]
     return Overview(

@@ -17,6 +17,12 @@ def test_migrations_match_models(client):
     """Tras `upgrade head` no debe quedar ninguna diferencia con los modelos (migración olvidada)."""
     with engine.connect() as conn:
         diff = compare_metadata(MigrationContext.configure(conn), Base.metadata)
+        if conn.dialect.name == "sqlite":
+            # tasks.assignee_id se añadió con REFERENCES en la propia columna (única forma en SQLite) y la
+            # reflexión de SQLAlchemy no lee su ON DELETE: se descarta ese falso positivo y se comprueba con PRAGMA.
+            diff = [d for d in diff if not (d[0] in ("add_fk", "remove_fk") and [c.name for c in d[1].columns] == ["assignee_id"])]
+            rules = {r[3]: r[6] for r in conn.execute(text("PRAGMA foreign_key_list('tasks')"))}
+            assert rules["assignee_id"] == "SET NULL"
     assert diff == []
 
 
@@ -50,4 +56,4 @@ def test_legacy_database_without_version_table_is_stamped():
     init_db()
     with engine.connect() as conn:
         assert "recurrence" in {c["name"] for c in inspect(conn).get_columns("tasks")}
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0002"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0003"

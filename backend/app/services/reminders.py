@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 
 from ..models import Status, Task, User
-from . import mailer
+from . import access, mailer, trash
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def due_reminders(db: Session, user: User, now: datetime, channel: str) -> List[
     sent = Task.reminder_sent_at if channel == "browser" else Task.reminder_emailed_at
     tz = user_tz(user)
     candidates = db.query(Task).filter(
-        Task.user_id == user.id, Task.reminder_minutes.isnot(None), Task.due_date.isnot(None),
+        access.responsible(user), Task.deleted_at.is_(None), Task.reminder_minutes.isnot(None), Task.due_date.isnot(None),
         sent.is_(None), Task.status.in_(OPEN), Task.parent_task_id.is_(None),
     ).all()
     out = []
@@ -89,7 +89,7 @@ def send_daily_digest(db: Session, user: User, now: datetime) -> bool:
     if local.hour < user.digest_hour or user.last_digest_on == local.date():
         return False
     tasks = db.query(Task).filter(
-        Task.user_id == user.id, Task.due_date.isnot(None), Task.status.in_(OPEN), Task.parent_task_id.is_(None),
+        access.responsible(user), Task.deleted_at.is_(None), Task.due_date.isnot(None), Task.status.in_(OPEN), Task.parent_task_id.is_(None),
     ).order_by(Task.due_date).all()
     overdue = [t for t in tasks if _local_day(t, tz) < local.date()]
     today = [t for t in tasks if _local_day(t, tz) == local.date()]
@@ -113,6 +113,7 @@ def send_daily_digest(db: Session, user: User, now: datetime) -> bool:
 def run_tick(db: Session, now: Optional[datetime] = None) -> None:
     """Una pasada del planificador: envía los correos pendientes de todos los usuarios."""
     now = now or datetime.now(timezone.utc)
+    trash.purge_expired(db, now)
     users = db.query(User).filter(User.is_active.is_(True), (User.email_reminders.is_(True)) | (User.daily_digest.is_(True))).all()
     for user in users:
         try:

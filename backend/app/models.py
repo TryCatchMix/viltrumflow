@@ -64,7 +64,9 @@ class User(TimestampMixin, Base):
     last_digest_on: Mapped[Optional[date]] = mapped_column(Date)
 
     projects: Mapped[List["Project"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
-    tasks: Mapped[List["Task"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
+    tasks: Mapped[List["Task"]] = relationship(
+        back_populates="owner", cascade="all, delete-orphan", foreign_keys="Task.user_id"
+    )
     notes: Mapped[List["Note"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     google_account: Mapped[Optional["GoogleAccount"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", uselist=False
@@ -83,6 +85,23 @@ class Project(TimestampMixin, Base):
 
     owner: Mapped[User] = relationship(back_populates="projects")
     tasks: Mapped[List["Task"]] = relationship(back_populates="project")
+    members: Mapped[List["ProjectMember"]] = relationship(back_populates="project", cascade="all, delete-orphan")
+
+
+class ProjectMember(Base):
+    """Usuario con el que el propietario ha compartido un proyecto. role: editor | viewer."""
+
+    __tablename__ = "project_members"
+    __table_args__ = (UniqueConstraint("project_id", "user_id", name="uq_project_member"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(10), default="editor")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    project: Mapped[Project] = relationship(back_populates="members")
+    user: Mapped[User] = relationship()
 
 
 class Task(TimestampMixin, Base):
@@ -110,12 +129,20 @@ class Task(TimestampMixin, Base):
     reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     reminder_emailed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
+    # Papelera: borrado lógico; se purga pasados 30 días
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
+
+    # Responsable dentro de un proyecto compartido; assigned_notified_at evita avisarle dos veces
+    assignee_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    assigned_notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id", ondelete="SET NULL"), index=True)
     parent_task_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), index=True)
     note_id: Mapped[Optional[int]] = mapped_column(ForeignKey("notes.id", ondelete="SET NULL"))
 
-    owner: Mapped[User] = relationship(back_populates="tasks")
+    owner: Mapped[User] = relationship(back_populates="tasks", foreign_keys=[user_id])
+    assignee: Mapped[Optional[User]] = relationship(foreign_keys=[assignee_id])
     project: Mapped[Optional[Project]] = relationship(back_populates="tasks")
     note: Mapped[Optional["Note"]] = relationship()
     parent: Mapped[Optional["Task"]] = relationship(back_populates="subtasks", remote_side=[id])
@@ -152,6 +179,7 @@ class Note(TimestampMixin, Base):
     tags: Mapped[str] = mapped_column(String(1000), default="")  # derivadas de #etiquetas, separadas por comas
     is_pinned: Mapped[bool] = mapped_column(Boolean, default=False)
     is_daily: Mapped[bool] = mapped_column(Boolean, default=False)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
 
     owner: Mapped[User] = relationship(back_populates="notes")

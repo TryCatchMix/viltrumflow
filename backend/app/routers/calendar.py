@@ -119,7 +119,7 @@ def sync(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Envía a Google Calendar todas las tareas con fecha (crea o actualiza sus eventos)."""
     acct = _account(user)
     tasks = db.query(Task).filter(
-        Task.user_id == user.id, Task.parent_task_id.is_(None),
+        Task.user_id == user.id, Task.parent_task_id.is_(None), Task.deleted_at.is_(None),
         Task.due_date.isnot(None), Task.status != Status.ARCHIVED,
     ).all()
     result = schemas.SyncResult(synced=0, failed=0)

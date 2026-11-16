@@ -223,7 +223,7 @@ def auto_sync(db: Session, user: User, task: Task) -> None:
     acct = user.google_account
     if not (settings.google_configured and acct and acct.auto_sync):
         return
-    if task.parent_task_id is not None:
+    if task.parent_task_id is not None or task.deleted_at is not None:
         return
     try:
         upsert_task_event(db, acct, task)

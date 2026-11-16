@@ -12,7 +12,7 @@ from ..deps import get_current_user
 from ..models import Note, NoteLink, User
 from ..services import markdown as md
 from ..services import vault
-from ..services.notes import find_by_title, resolve_dangling, sync_note_index
+from ..services.notes import find_by_title, free_title, resolve_dangling, sync_note_index, trash_note
 
 router = APIRouter()
 
@@ -21,7 +21,7 @@ DAILY_FOLDER = "Diario"
 
 def _get(db: Session, user: User, note_id: int) -> Note:
     n = db.get(Note, note_id)
-    if not n or n.owner_id != user.id:
+    if not n or n.owner_id != user.id or n.deleted_at is not None:
         raise HTTPException(404, "Nota no encontrada")
     return n
 
@@ -47,7 +47,7 @@ def list_notes(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Note).filter(Note.owner_id == user.id)
+    query = db.query(Note).filter(Note.owner_id == user.id, Note.deleted_at.is_(None))
     if q and q.strip():
         like = f"%{q.strip()}%"
         query = query.filter(or_(Note.title.ilike(like), Note.content.ilike(like)))
@@ -69,6 +69,7 @@ def list_notes(
 def create_note(data: schemas.NoteCreate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if find_by_title(db, user.id, data.title):
         raise HTTPException(409, "Ya existe una nota con ese título")
+    free_title(db, user.id, data.title)
     note = Note(**data.model_dump(), owner_id=user.id)
     db.add(note)
     db.flush()
@@ -85,6 +86,7 @@ def daily_note(day: Optional[date] = None, user: User = Depends(get_current_user
     title = (day or date.today()).isoformat()
     note = find_by_title(db, user.id, title)
     if not note:
+        free_title(db, user.id, title)
         note = Note(title=title, folder=DAILY_FOLDER, is_daily=True, owner_id=user.id,
                     content=f"# {title}\n\n## Tareas\n- [ ] \n\n## Notas\n")
         db.add(note)
@@ -98,7 +100,7 @@ def daily_note(day: Optional[date] = None, user: User = Depends(get_current_user
 
 @router.get("/graph", response_model=schemas.Graph)
 def graph(include_tags: bool = False, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    notes = db.query(Note).filter(Note.owner_id == user.id).all()
+    notes = db.query(Note).filter(Note.owner_id == user.id, Note.deleted_at.is_(None)).all()
     by_id = {n.id: n for n in notes}
     nodes = {f"n{n.id}": schemas.GraphNode(id=f"n{n.id}", label=n.title, kind="note", note_id=n.id, folder=n.folder) for n in notes}
     edges, seen = [], set()
@@ -131,7 +133,7 @@ def graph(include_tags: bool = False, user: User = Depends(get_current_user), db
 @router.get("/tags", response_model=List[schemas.TagCount])
 def tags(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     counter = Counter()
-    for (t,) in db.query(Note.tags).filter(Note.owner_id == user.id, Note.tags != ""):
+    for (t,) in db.query(Note.tags).filter(Note.owner_id == user.id, Note.deleted_at.is_(None), Note.tags != ""):
         counter.update(filter(None, t.split(",")))
     return [schemas.TagCount(tag=t, count=c) for t, c in sorted(counter.items(), key=lambda x: (-x[1], x[0]))]
 
@@ -140,7 +142,7 @@ def tags(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
 def checklist(include_done: bool = True, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Todas las casillas `- [ ]` escritas en las notas."""
     out = []
-    notes = db.query(Note).filter(Note.owner_id == user.id, Note.content.like("%[%]%")).order_by(Note.updated_at.desc())
+    notes = db.query(Note).filter(Note.owner_id == user.id, Note.deleted_at.is_(None), Note.content.like("%[%]%")).order_by(Note.updated_at.desc())
     for n in notes:
         for line, text, checked in md.extract_checklist(n.content):
             if text and (include_done or not checked):
@@ -151,7 +153,7 @@ def checklist(include_done: bool = True, user: User = Depends(get_current_user),
 @router.get("/export")
 def export_vault(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Descarga todas las notas como un zip de archivos .md en sus carpetas."""
-    notes = db.query(Note).filter(Note.owner_id == user.id).order_by(Note.folder, Note.title).all()
+    notes = db.query(Note).filter(Note.owner_id == user.id, Note.deleted_at.is_(None)).order_by(Note.folder, Note.title).all()
     name = f"viltrumflow-notas-{date.today().isoformat()}.zip"
     return Response(vault.export_zip(notes), media_type="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="{name}"'})
@@ -201,6 +203,7 @@ def update_note(note_id: int, data: schemas.NoteUpdate, user: User = Depends(get
         other = find_by_title(db, user.id, new_title)
         if other and other.id != note.id:
             raise HTTPException(409, "Ya existe una nota con ese título")
+        free_title(db, user.id, new_title, keep_id=note.id)
     old_title = note.title
     for k, v in values.items():
         setattr(note, k, v)
@@ -234,8 +237,6 @@ def toggle_checklist(note_id: int, data: schemas.ChecklistToggle, user: User = D
 
 @router.delete("/{note_id}", status_code=204)
 def delete_note(note_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    note = _get(db, user, note_id)
-    # Los enlaces entrantes pasan a «sin resolver» (también lo garantiza la FK SET NULL)
-    db.query(NoteLink).filter(NoteLink.target_id == note.id).update({"target_id": None})
-    db.delete(note)
+    """Envía la nota a la papelera (se puede restaurar durante 30 días)."""
+    trash_note(db, _get(db, user, note_id))
     db.commit()

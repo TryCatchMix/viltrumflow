@@ -10,7 +10,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from .config import settings
 from .database import SessionLocal, check_db_connection, init_db
-from .routers import auth, calendar, notes, projects, reminders, search, stats, tasks
+from .routers import auth, calendar, notes, projects, reminders, search, stats, tasks, trash
 from .services.reminders import run_tick
 
 logging.basicConfig(
@@ -26,7 +26,7 @@ def _tick() -> None:
 
 
 async def _scheduler() -> None:
-    """Cada minuto envía por correo los recordatorios y resúmenes que toquen."""
+    """Cada minuto envía por correo los recordatorios y resúmenes que toquen y purga la papelera."""
     while True:
         try:
             await asyncio.to_thread(_tick)
@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting %s v%s (%s)", settings.PROJECT_NAME, settings.VERSION, settings.ENVIRONMENT)
     init_db()
     scheduler = None
-    if settings.SCHEDULER_ENABLED and settings.email_configured:
+    if settings.SCHEDULER_ENABLED:  # correos (si hay SMTP) y purga de la papelera
         scheduler = asyncio.create_task(_scheduler())
     yield
     if scheduler:
@@ -95,5 +95,6 @@ app.include_router(tasks.router, prefix=f"{P}/tasks", tags=["Tasks"])
 app.include_router(notes.router, prefix=f"{P}/notes", tags=["Notes"])
 app.include_router(stats.router, prefix=f"{P}/stats", tags=["Stats"])
 app.include_router(search.router, prefix=f"{P}/search", tags=["Search"])
+app.include_router(trash.router, prefix=f"{P}/trash", tags=["Trash"])
 app.include_router(reminders.router, prefix=f"{P}/reminders", tags=["Reminders"])
 app.include_router(calendar.router, prefix=f"{P}/calendar", tags=["Calendar"])
