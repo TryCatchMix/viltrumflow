@@ -91,6 +91,17 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+class ForgotPassword(BaseModel):
+    email: EmailStr
+
+
+class ResetPassword(BaseModel):
+    token: str
+    new_password: str = Field(min_length=8, max_length=72)
+
+    _strong = field_validator("new_password")(_strong_password)
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 

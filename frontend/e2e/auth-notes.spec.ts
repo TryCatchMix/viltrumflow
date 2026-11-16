@@ -75,3 +75,23 @@ test('buscador rápido y grafo', async ({ browser }) => {
   await expect(page.getByText(/3 notas · 2 enlaces/)).toBeVisible();
   await expect(page.locator('canvas')).toBeVisible();
 });
+
+test('recuperar contraseña: páginas y validación del enlace', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByRole('link', { name: '¿Has olvidado tu contraseña?' }).click();
+  await expect(page.getByRole('heading', { name: 'Recupera tu contraseña' })).toBeVisible();
+  await page.locator('input[name=email]').fill('alguien@example.com');
+  await page.getByRole('button', { name: 'Enviar enlace' }).click();
+  // el servidor de pruebas no tiene correo configurado y lo dice con claridad
+  await expect(page.getByRole('alert')).toContainText('no tiene configurado el envío de correos');
+
+  await page.goto('/reset-password?token=no-es-valido');
+  await expect(page).toHaveURL(/reset-password$/);  // el token se retira de la barra de direcciones
+  await page.locator('input[name=password]').fill('Nueva12345');
+  await page.getByRole('button', { name: 'Guardar contraseña' }).click();
+  await expect(page.getByRole('alert')).toContainText('no es válido o ha caducado');
+
+  await page.goto('/reset-password');
+  await expect(page.getByRole('alert')).toContainText('le falta el código');
+  await expect(page.getByRole('button', { name: 'Guardar contraseña' })).toBeDisabled();
+});

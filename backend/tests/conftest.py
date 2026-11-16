@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from app.database import Base, engine
 from app.main import app
+from app.services import ratelimit
 
 
 @pytest.fixture()
@@ -20,6 +21,7 @@ def client():
     Base.metadata.drop_all(bind=engine)
     with engine.begin() as conn:
         conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
+    ratelimit.reset()
     with TestClient(app, follow_redirects=False) as c:
         yield c
 

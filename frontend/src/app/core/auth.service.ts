@@ -44,7 +44,12 @@ export class AuthService {
   loadUser() { return this.http.get<User>(`${this.api}/me`).pipe(tap(u => this.user.set(u))); }
   updateProfile(data: Partial<User>) { return this.http.put<User>(`${this.api}/me`, data).pipe(tap(u => this.user.set(u))); }
   changePassword(current_password: string, new_password: string) {
-    return this.http.post<{ message: string }>(`${this.api}/change-password`, { current_password, new_password });
+    // El servidor cierra las demás sesiones y devuelve tokens nuevos para esta
+    return this.http.post<Token>(`${this.api}/change-password`, { current_password, new_password }).pipe(tap(t => this.store(t)));
+  }
+  forgotPassword(email: string) { return this.http.post<{ message: string }>(`${this.api}/forgot-password`, { email }); }
+  resetPassword(token: string, new_password: string) {
+    return this.http.post<{ message: string }>(`${this.api}/reset-password`, { token, new_password });
   }
 
   logout(redirect = true) {

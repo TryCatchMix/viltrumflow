@@ -184,7 +184,7 @@ export class SettingsComponent implements AfterViewInit {
   changePassword() {
     this.busy.set(true);
     this.auth.changePassword(this.pw.current, this.pw.next).subscribe({
-      next: () => { this.busy.set(false); this.pw = { current: '', next: '' }; this.toast.success('Contraseña actualizada'); },
+      next: () => { this.busy.set(false); this.pw = { current: '', next: '' }; this.toast.success('Contraseña actualizada. Se han cerrado tus otras sesiones'); },
       error: e => { this.busy.set(false); this.toast.error(e); },
     });
   }

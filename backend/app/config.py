@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # Protección del inicio de sesión: intentos fallidos permitidos por IP y usuario en la ventana
+    LOGIN_MAX_ATTEMPTS: int = 5
+    LOGIN_WINDOW_MINUTES: int = 15
+    PASSWORD_RESET_MINUTES: int = 30
+
     BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:4200", "http://localhost"]
     ALLOWED_HOSTS: List[str] = ["*"]
 

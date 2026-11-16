@@ -5,6 +5,9 @@ import { authGuard, guestGuard } from './core/auth.guard';
 export const routes: Routes = [
   { path: 'login', canActivate: [guestGuard], loadComponent: () => import('./pages/auth.component').then(m => m.AuthComponent), data: { mode: 'login' } },
   { path: 'register', canActivate: [guestGuard], loadComponent: () => import('./pages/auth.component').then(m => m.AuthComponent), data: { mode: 'register' } },
+  { path: 'forgot-password', canActivate: [guestGuard], loadComponent: () => import('./pages/auth.component').then(m => m.AuthComponent), data: { mode: 'forgot' } },
+  // Sin guestGuard: el enlace del correo debe funcionar aunque haya una sesión abierta en este navegador
+  { path: 'reset-password', loadComponent: () => import('./pages/auth.component').then(m => m.AuthComponent), data: { mode: 'reset' } },
   {
     path: '',
     canActivate: [authGuard],
