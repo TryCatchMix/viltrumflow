@@ -19,7 +19,9 @@ AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 API = "https://www.googleapis.com/calendar/v3"
-SCOPES = "openid email https://www.googleapis.com/auth/calendar.events"
+# calendarlist.readonly: solo para mostrar la lista de calendarios entre los que elegir
+SCOPES = ("openid email https://www.googleapis.com/auth/calendar.events "
+          "https://www.googleapis.com/auth/calendar.calendarlist.readonly")
 TIMEOUT = 10.0
 
 
@@ -192,6 +194,17 @@ def upsert_task_event(db: Session, acct: GoogleAccount, task: Task) -> None:
         raise GoogleError(f"No se pudo crear el evento ({r.status_code})")
     task.google_event_id = r.json()["id"]
     db.commit()
+
+
+def list_calendars(db: Session, acct: GoogleAccount) -> List[dict]:
+    """Calendarios en los que el usuario puede escribir."""
+    r = _request(db, acct, "GET", "/users/me/calendarList", params={"minAccessRole": "writer", "maxResults": 250})
+    if r.status_code == 403:
+        raise GoogleError("Falta el permiso para ver tus calendarios: desconecta y vuelve a conectar Google Calendar")
+    if r.status_code != 200:
+        raise GoogleError(f"No se pudieron leer los calendarios ({r.status_code})")
+    return [{"id": c["id"], "name": c.get("summaryOverride") or c.get("summary") or c["id"], "primary": bool(c.get("primary"))}
+            for c in r.json().get("items", [])]
 
 
 PULL_INTERVAL = timedelta(minutes=10)

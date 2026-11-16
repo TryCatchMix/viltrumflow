@@ -12,7 +12,7 @@ class FakeGoogle:
     """Simula los endpoints de Google que usa la integración."""
 
     def __init__(self):
-        self.events, self.calls, self.seq, self.refreshes = {}, [], 0, 0
+        self.events, self.calls, self.seq, self.refreshes, self.calendars_used = {}, [], 0, 0, []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         url, method = str(request.url), request.method
@@ -27,6 +27,10 @@ class FakeGoogle:
             return httpx.Response(200)
         assert request.headers["Authorization"].startswith("Bearer at")
         import json
+        if "calendarList" in url:
+            return httpx.Response(200, json={"items": [{"id": "primary@x", "summary": "Personal", "primary": True},
+                                                       {"id": "trabajo@x", "summary": "Trabajo"}]})
+        self.calendars_used.append(url.split("/calendars/")[1].split("/")[0])
         if method == "POST":
             self.seq += 1
             eid = f"ev{self.seq}"
@@ -67,7 +71,7 @@ def connect(client, auth):
 
 
 def test_not_configured(client, auth):
-    assert client.get(f"{C}/status", headers=auth).json() == {"configured": False, "connected": False, "email": None, "auto_sync": True}
+    assert client.get(f"{C}/status", headers=auth).json() == {"configured": False, "connected": False, "email": None, "auto_sync": True, "calendar_id": "primary"}
     assert client.get(f"{C}/auth-url", headers=auth).status_code == 503
     # sin Google, las tareas funcionan con normalidad
     assert client.post(T, headers=auth, json={"title": "x", "due_date": "2026-03-10T00:00:00Z"}).status_code == 201
@@ -184,3 +188,18 @@ def test_changes_made_in_google_reach_the_task(client, auth, google):
         db.commit()
         gcal.pull_all(db)
     assert client.get(f"{T}/{a['id']}", headers=auth).json()["title"] == "Entrega final"
+
+
+def test_choose_calendar(client, auth, google):
+    connect(client, auth)
+    assert [c["name"] for c in client.get(f"{C}/calendars", headers=auth).json()] == ["Personal", "Trabajo"]
+    t = client.post(T, headers=auth, json={"title": "Entrega", "due_date": "2026-03-10T00:00:00Z"}).json()
+    assert google.calendars_used[-1] == "primary" and t["google_event_id"] == "ev1"
+
+    assert client.put(f"{C}/settings", headers=auth, json={"calendar_id": "ajeno@x"}).status_code == 400
+    s = client.put(f"{C}/settings", headers=auth, json={"calendar_id": "trabajo@x"}).json()
+    assert s["calendar_id"] == "trabajo@x" and s["auto_sync"] is True
+    # el evento se retira del calendario anterior y la sincronización lo crea en el nuevo
+    assert google.events == {} and client.get(f"{T}/{t['id']}", headers=auth).json()["google_event_id"] is None
+    assert client.post(f"{C}/sync", headers=auth).json()["synced"] == 1
+    assert google.calendars_used[-1] == "trabajo%40x" and len(google.events) == 1

@@ -198,6 +198,7 @@ class TaskUpdate(BaseModel):
     recurrence: Optional[Recurrence] = None
     reminder_minutes: Optional[int] = Field(None, ge=0, le=40320)
     assignee_id: Optional[int] = None
+    time_spent_seconds: Optional[int] = Field(None, ge=0, le=36_000_000)  # corrección manual del tiempo
 
 
 class TaskMove(BaseModel):
@@ -229,6 +230,8 @@ class TaskOut(ORM):
     google_event_id: Optional[str] = None
     recurrence: str = "none"
     reminder_minutes: Optional[int] = None
+    time_spent_seconds: int = 0
+    timer_started_at: Optional[datetime] = None
     user_id: int
     note_title: Optional[str] = None  # solo para quien es dueño de la nota
     owner_name: str = ""
@@ -277,6 +280,10 @@ class NoteCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     content: str = Field("", max_length=1_000_000)
     folder: str = Field("", max_length=300)
+    # Plantilla (nota de la carpeta «Plantillas») de la que copiar el contenido, con la fecha y hora del cliente
+    template_id: Optional[int] = None
+    day: Optional[str] = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    time: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$")
 
     _t = field_validator("title")(_clean_title)
     _f = field_validator("folder")(_clean_folder)
@@ -323,6 +330,24 @@ class NoteOut(NoteSummary):
     content: str
     backlinks: List[NoteRef] = []
     outgoing: List[NoteRef] = []
+
+
+class NoteVersionOut(ORM):
+    id: int
+    title: str
+    created_at: datetime
+    size: int = 0
+    preview: str = ""
+
+
+class NoteVersionDetail(NoteVersionOut):
+    content: str
+
+
+class MentionOut(BaseModel):
+    note_id: int
+    title: str
+    context: str
 
 
 class GraphNode(BaseModel):
@@ -419,10 +444,18 @@ class CalendarStatus(BaseModel):
     connected: bool
     email: Optional[str] = None
     auto_sync: bool = True
+    calendar_id: str = "primary"
 
 
 class CalendarSettings(BaseModel):
-    auto_sync: bool
+    auto_sync: Optional[bool] = None
+    calendar_id: Optional[str] = Field(None, min_length=1, max_length=255)
+
+
+class CalendarInfo(BaseModel):
+    id: str
+    name: str
+    primary: bool = False
 
 
 class CalendarEvent(BaseModel):

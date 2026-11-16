@@ -90,6 +90,10 @@ def _after_complete(db: Session, task: Task) -> None:
 def _apply_status(task: Task, status: Status) -> None:
     if status == Status.COMPLETED and task.status != Status.COMPLETED:
         task.completed_at = datetime.now(timezone.utc)
+        if task.timer_started_at:  # una tarea terminada no sigue contando tiempo
+            started = task.timer_started_at if task.timer_started_at.tzinfo else task.timer_started_at.replace(tzinfo=timezone.utc)
+            task.time_spent_seconds = (task.time_spent_seconds or 0) + max(0, int((task.completed_at - started).total_seconds()))
+            task.timer_started_at = None
     elif status != Status.COMPLETED:
         task.completed_at = None
     task.status = status
@@ -264,6 +268,38 @@ def move_task(task_id: int, data: schemas.TaskMove, user: User = Depends(get_cur
         gcal.auto_sync(db, task.owner, task)
     if not was_done:
         _after_complete(db, task)
+    return _out(db, user, task)
+
+
+def _stop_timer(task: Task, now: datetime) -> None:
+    if task.timer_started_at:
+        started = task.timer_started_at if task.timer_started_at.tzinfo else task.timer_started_at.replace(tzinfo=timezone.utc)
+        task.time_spent_seconds += max(0, int((now - started).total_seconds()))
+        task.timer_started_at = None
+
+
+@router.post("/{task_id}/timer/start", response_model=schemas.TaskOut)
+def start_timer(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Arranca el cronómetro de la tarea. Solo hay uno en marcha por persona: el anterior se detiene."""
+    task = _get(db, user, task_id, write=True)
+    now = datetime.now(timezone.utc)
+    running = db.query(Task).filter(Task.timer_started_at.isnot(None), access.responsible(user), Task.id != task.id).all()
+    for other in running:
+        if access.can_edit(db, user, other):
+            _stop_timer(other, now)
+    if not task.timer_started_at:
+        task.timer_started_at = now
+    db.commit()
+    db.refresh(task)
+    return _out(db, user, task)
+
+
+@router.post("/{task_id}/timer/stop", response_model=schemas.TaskOut)
+def stop_timer(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    task = _get(db, user, task_id, write=True)
+    _stop_timer(task, datetime.now(timezone.utc))
+    db.commit()
+    db.refresh(task)
     return _out(db, user, task)
 
 

@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import func
@@ -82,3 +82,83 @@ def restore_note(db: Session, note: Note) -> None:
     db.flush()
     sync_note_index(db, note)
     resolve_dangling(db, note)
+
+
+# ---------- Historial de versiones ----------
+VERSION_INTERVAL = timedelta(minutes=10)
+MAX_VERSIONS = 50
+
+
+def snapshot(db: Session, note: Note, force: bool = False) -> None:
+    """
+    Guarda el contenido actual antes de cambiarlo. Con el autoguardado habría una versión por pulsación,
+    así que solo se guarda una cada 10 minutos (o siempre con `force`, antes de restaurar o sobrescribir).
+    """
+    from ..models import NoteVersion
+
+    last = db.query(NoteVersion).filter(NoteVersion.note_id == note.id).order_by(NoteVersion.created_at.desc()).first()
+    if last:
+        if last.content == note.content:
+            return
+        created = last.created_at if last.created_at.tzinfo else last.created_at.replace(tzinfo=timezone.utc)
+        if not force and datetime.now(timezone.utc) - created < VERSION_INTERVAL:
+            return
+    elif not note.content.strip():
+        return  # nota recién creada y vacía: no hay nada que conservar
+    db.add(NoteVersion(note_id=note.id, title=note.title, content=note.content))
+    db.flush()
+    old = db.query(NoteVersion.id).filter(NoteVersion.note_id == note.id).order_by(NoteVersion.created_at.desc(), NoteVersion.id.desc()).offset(MAX_VERSIONS).all()
+    if old:
+        db.query(NoteVersion).filter(NoteVersion.id.in_([i for (i,) in old])).delete(synchronize_session=False)
+
+
+# ---------- Plantillas ----------
+TEMPLATE_FOLDER = "Plantillas"
+
+
+def render_template(content: str, title: str, day: str, time: str) -> str:
+    """Sustituye {{title}}, {{date}} y {{time}} (y sus nombres en español)."""
+    values = {"title": title, "titulo": title, "título": title, "date": day, "fecha": day, "time": time, "hora": time}
+    return re.sub(r"\{\{\s*([a-zA-Záéíóúñ]+)\s*\}\}", lambda m: values.get(m.group(1).lower(), m.group(0)), content)
+
+
+def find_template(db: Session, owner_id: int, name: str) -> Optional[Note]:
+    note = find_by_title(db, owner_id, name)
+    return note if note and note.folder.split("/")[0].lower() == TEMPLATE_FOLDER.lower() else None
+
+
+# ---------- Menciones sin enlazar ----------
+def _mention_re(title: str) -> "re.Pattern":
+    # Palabra completa, sin distinguir mayúsculas (\w de Python entiende tildes y ñ)
+    return re.compile(r"(?<![\w\[])" + re.escape(title) + r"(?![\w\]])", re.IGNORECASE)
+
+
+def _mask(line: str) -> str:
+    """Deja en blanco (misma longitud) lo que no cuenta como texto: enlaces, código en línea y URLs."""
+    for pattern in (md.WIKILINK, re.compile(r"`[^`\n]*`"), re.compile(r"\]\([^)\n]*\)"), re.compile(r"https?://\S+")):
+        line = pattern.sub(lambda m: " " * len(m.group(0)), line)
+    return line
+
+
+def find_mention(content: str, title: str):
+    """(nº de línea, inicio, fin) de la primera mención en texto plano del título, o None."""
+    pattern = _mention_re(title)
+    lines = content.split("\n")
+    for i, _ in md.prose_lines(content):
+        m = pattern.search(_mask(lines[i]))
+        if m:
+            return i, m.start(), m.end()
+    return None
+
+
+def link_mention(content: str, title: str) -> Optional[str]:
+    """Convierte la primera mención en un enlace; conserva el texto original como alias si difiere del título."""
+    found = find_mention(content, title)
+    if not found:
+        return None
+    i, start, end = found
+    lines = content.split("\n")
+    text = lines[i][start:end]
+    link = f"[[{title}]]" if text == title else f"[[{title}|{text}]]"
+    lines[i] = lines[i][:start] + link + lines[i][end:]
+    return "\n".join(lines)

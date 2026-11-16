@@ -132,6 +132,10 @@ class Task(TimestampMixin, Base):
     # Papelera: borrado lógico; se purga pasados 30 días
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
 
+    # Registro de tiempo: segundos acumulados y, si el cronómetro está en marcha, cuándo arrancó
+    time_spent_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    timer_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
     # Responsable dentro de un proyecto compartido; assigned_notified_at evita avisarle dos veces
     assignee_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
     assigned_notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -188,6 +192,23 @@ class Note(TimestampMixin, Base):
     )
     # Cascada del ORM (no de la base de datos) para que al borrar la fila se borre también el fichero
     attachments: Mapped[List["Attachment"]] = relationship(back_populates="note", cascade="all, delete-orphan")
+    versions: Mapped[List["NoteVersion"]] = relationship(
+        back_populates="note", cascade="all, delete-orphan", order_by="NoteVersion.created_at.desc()"
+    )
+
+
+class NoteVersion(Base):
+    """Copia del contenido de una nota antes de un cambio, para poder volver atrás."""
+
+    __tablename__ = "note_versions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    note_id: Mapped[int] = mapped_column(ForeignKey("notes.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    note: Mapped[Note] = relationship(back_populates="versions")
 
 
 class Attachment(Base):

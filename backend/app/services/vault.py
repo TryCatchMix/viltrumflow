@@ -13,7 +13,7 @@ from ..config import settings
 from ..models import Attachment, Note, User
 from . import files as store_files
 from .files import IMAGE_SUFFIXES
-from .notes import find_by_title, free_title, resolve_dangling, sync_note_index
+from .notes import find_by_title, free_title, resolve_dangling, snapshot, sync_note_index
 
 MAX_FILES = 5000
 MAX_NOTE_BYTES = 1_000_000
@@ -172,6 +172,8 @@ def import_notes(db: Session, user: User, files: List[Tuple[str, bytes]], overwr
             res.skipped += 1
             continue
         if note:
+            if note.content != content:
+                snapshot(db, note, force=True)  # sobrescribir no debe perder lo que había
             note.content, note.folder = content, folder
             res.updated += 1
         else:

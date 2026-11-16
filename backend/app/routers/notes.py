@@ -12,6 +12,7 @@ from ..deps import get_current_user
 from ..models import Note, NoteLink, User
 from ..services import markdown as md
 from ..services import vault
+from ..services import notes as note_service
 from ..services.notes import find_by_title, free_title, resolve_dangling, sync_note_index, trash_note
 
 router = APIRouter()
@@ -70,7 +71,14 @@ def create_note(data: schemas.NoteCreate, user: User = Depends(get_current_user)
     if find_by_title(db, user.id, data.title):
         raise HTTPException(409, "Ya existe una nota con ese título")
     free_title(db, user.id, data.title)
-    note = Note(**data.model_dump(), owner_id=user.id)
+    values = data.model_dump(exclude={"template_id", "day", "time"})
+    if data.template_id is not None:
+        tpl = db.get(Note, data.template_id)
+        if not tpl or tpl.owner_id != user.id or tpl.deleted_at is not None:
+            raise HTTPException(400, "Plantilla no válida")
+        values["content"] = note_service.render_template(
+            tpl.content, data.title, data.day or date.today().isoformat(), data.time or "")
+    note = Note(**values, owner_id=user.id)
     db.add(note)
     db.flush()
     sync_note_index(db, note)
@@ -87,8 +95,10 @@ def daily_note(day: Optional[date] = None, user: User = Depends(get_current_user
     note = find_by_title(db, user.id, title)
     if not note:
         free_title(db, user.id, title)
-        note = Note(title=title, folder=DAILY_FOLDER, is_daily=True, owner_id=user.id,
-                    content=f"# {title}\n\n## Tareas\n- [ ] \n\n## Notas\n")
+        # Si existe una plantilla «Diario» en la carpeta Plantillas, la nota diaria se crea a partir de ella
+        tpl = note_service.find_template(db, user.id, "Diario")
+        content = note_service.render_template(tpl.content, title, title, "") if tpl else f"# {title}\n\n## Tareas\n- [ ] \n\n## Notas\n"
+        note = Note(title=title, folder=DAILY_FOLDER, is_daily=True, owner_id=user.id, content=content)
         db.add(note)
         db.flush()
         sync_note_index(db, note)
@@ -207,6 +217,8 @@ def update_note(note_id: int, data: schemas.NoteUpdate, user: User = Depends(get
             raise HTTPException(409, "Ya existe una nota con ese título")
         free_title(db, user.id, new_title, keep_id=note.id)
     old_title = note.title
+    if "content" in values and values["content"] != note.content:
+        note_service.snapshot(db, note)  # la versión anterior queda en el historial
     for k, v in values.items():
         setattr(note, k, v)
     db.flush()
@@ -232,6 +244,76 @@ def toggle_checklist(note_id: int, data: schemas.ChecklistToggle, user: User = D
         note.content = md.toggle_checkbox(note.content, data.line, data.checked)
     except ValueError as exc:
         raise HTTPException(409, str(exc))
+    db.commit()
+    db.refresh(note)
+    return _detail(db, note)
+
+
+@router.get("/{note_id}/versions", response_model=List[schemas.NoteVersionOut])
+def list_versions(note_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    note = _get(db, user, note_id)
+    return [schemas.NoteVersionOut(id=v.id, title=v.title, created_at=v.created_at, size=len(v.content),
+                                   preview=" ".join(v.content[:160].split())) for v in note.versions]
+
+
+def _version(db: Session, user: User, note_id: int, version_id: int):
+    note = _get(db, user, note_id)
+    v = next((v for v in note.versions if v.id == version_id), None)
+    if not v:
+        raise HTTPException(404, "Versión no encontrada")
+    return note, v
+
+
+@router.get("/{note_id}/versions/{version_id}", response_model=schemas.NoteVersionDetail)
+def get_version(note_id: int, version_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    _, v = _version(db, user, note_id, version_id)
+    return schemas.NoteVersionDetail(id=v.id, title=v.title, created_at=v.created_at, size=len(v.content), content=v.content)
+
+
+@router.post("/{note_id}/versions/{version_id}/restore", response_model=schemas.NoteOut)
+def restore_version(note_id: int, version_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Vuelve al contenido de esa versión. Lo que había se guarda antes como una versión más."""
+    note, v = _version(db, user, note_id, version_id)
+    content = v.content
+    note_service.snapshot(db, note, force=True)
+    note.content = content
+    db.flush()
+    sync_note_index(db, note)
+    db.commit()
+    db.refresh(note)
+    return _detail(db, note)
+
+
+@router.get("/{note_id}/mentions", response_model=List[schemas.MentionOut])
+def unlinked_mentions(note_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Notas que nombran a esta en texto plano sin enlazarla."""
+    note = _get(db, user, note_id)
+    if len(note.title) < 3:
+        return []  # títulos muy cortos coincidirían con cualquier cosa
+    linked = {i for (i,) in db.query(NoteLink.source_id).filter(NoteLink.target_id == note.id)}
+    candidates = db.query(Note).filter(
+        Note.owner_id == user.id, Note.deleted_at.is_(None), Note.id != note.id, Note.content.ilike(f"%{note.title}%"),
+    ).order_by(Note.title).all()
+    out = []
+    for c in candidates:
+        found = None if c.id in linked else note_service.find_mention(c.content, note.title)
+        if found:
+            line = c.content.split("\n")[found[0]].strip()
+            out.append(schemas.MentionOut(note_id=c.id, title=c.title, context=line if len(line) <= 160 else line[:159] + "…"))
+    return out
+
+
+@router.post("/{note_id}/mentions/{source_id}/link", response_model=schemas.NoteOut)
+def link_mention(note_id: int, source_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Convierte en enlace la primera mención de esta nota dentro de otra. Devuelve esta nota actualizada."""
+    note, source = _get(db, user, note_id), _get(db, user, source_id)
+    content = note_service.link_mention(source.content, note.title)
+    if content is None:
+        raise HTTPException(409, "La mención ya no está en esa nota")
+    note_service.snapshot(db, source, force=True)
+    source.content = content
+    db.flush()
+    sync_note_index(db, source)
     db.commit()
     db.refresh(note)
     return _detail(db, note)
