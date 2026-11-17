@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: Optional[str] = None
     SMTP_FROM: Optional[str] = None
     SMTP_STARTTLS: bool = True
+    # Web Push: identificación ante los servicios de push (https://… o mailto:…). Por defecto, FRONTEND_URL si es https
+    VAPID_SUBJECT: Optional[str] = None
     # Desactívalo en todas las réplicas menos una si ejecutas varios procesos del backend
     SCHEDULER_ENABLED: bool = True
 

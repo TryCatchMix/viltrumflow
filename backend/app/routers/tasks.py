@@ -204,7 +204,7 @@ def get_task(task_id: int, user: User = Depends(get_current_user), db: Session =
 
 @router.put("/{task_id}", response_model=schemas.TaskOut)
 def update_task(task_id: int, data: schemas.TaskUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Actualización parcial. Enviar `null` en due_date, project_id, note_id, description, estimated_hours,
+    """Actualización parcial. Enviar `null` en due_date, project_id, note_id, description, estimated_minutes,
     reminder_minutes o assignee_id los vacía."""
     task = _get(db, user, task_id, write=True)
     values = data.model_dump(exclude_unset=True)
@@ -221,7 +221,7 @@ def update_task(task_id: int, data: schemas.TaskUpdate, user: User = Depends(get
     ):
         values["assignee_id"] = None  # el responsable no tiene acceso al nuevo proyecto
 
-    nullable = {"due_date", "project_id", "note_id", "description", "estimated_hours", "reminder_minutes", "assignee_id"}
+    nullable = {"due_date", "project_id", "note_id", "description", "estimated_minutes", "reminder_minutes", "assignee_id"}
     changed = set()
     for k, v in values.items():
         if v is None and k not in nullable:

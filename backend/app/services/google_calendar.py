@@ -172,7 +172,7 @@ def _event_body(task: Task) -> dict:
         body["end"] = {"date": (day + timedelta(days=1)).isoformat()}  # fin exclusivo
     else:
         body["start"] = {"dateTime": due.isoformat()}
-        body["end"] = {"dateTime": (due + timedelta(hours=1)).isoformat()}
+        body["end"] = {"dateTime": (due + timedelta(minutes=task.estimated_minutes or 60)).isoformat()}
     return body
 
 
@@ -257,7 +257,7 @@ def pull_changes(db: Session, acct: GoogleAccount, force: bool = False) -> int:
                 task.google_event_id = None
                 changed += 1
                 continue
-            before = (task.title, task.due_date, task.all_day)
+            before = (task.title, task.due_date, task.all_day, task.estimated_minutes)
             parsed = _parse_start(ev.get("start", {}))
             if parsed:
                 due, all_day = parsed
@@ -265,10 +265,16 @@ def pull_changes(db: Session, acct: GoogleAccount, force: bool = False) -> int:
                 if current != due or task.all_day != all_day:
                     task.due_date, task.all_day = due, all_day
                     task.reminder_sent_at = task.reminder_emailed_at = None  # nueva fecha: el aviso vuelve a contar
+                if not all_day:  # la duración del evento es la estimación de la tarea
+                    end = _parse_start(ev.get("end", {}))
+                    if end and not end[1]:
+                        minutes = int((end[0] - due).total_seconds() // 60)
+                        if 0 < minutes <= 24 * 60 and minutes != (task.estimated_minutes or 60):
+                            task.estimated_minutes = minutes
             title = (ev.get("summary") or "").removeprefix("✓ ").strip()
             if title and title != task.title:
                 task.title = title[:200]
-            if (task.title, task.due_date, task.all_day) != before:
+            if (task.title, task.due_date, task.all_day, task.estimated_minutes) != before:
                 changed += 1
         page = data.get("nextPageToken")
         if not page:

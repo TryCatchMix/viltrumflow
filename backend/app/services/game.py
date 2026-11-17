@@ -60,12 +60,12 @@ def _aware(dt: datetime) -> datetime:
 def task_xp(task: Task) -> int:
     """
     Experiencia por completar una tarea:
-    base según dificultad + tiempo (1 XP por cada 5 min registrados, máx. 60; sin registro, 5 por hora estimada, máx. 40)
+    base según dificultad + tiempo (1 XP por cada 5 min registrados, máx. 60; sin registro, 1 por cada 12 min estimados, máx. 40)
     + 25 % de la base si se termina a tiempo + un extra por prioridad alta o urgente.
     """
     base = TASK_BASE.get(task.difficulty or 2, 20)
     spent = task.time_spent_seconds or 0
-    effort = min(60, spent // 300) if spent >= 300 else min(40, (task.estimated_hours or 0) * 5)
+    effort = min(60, spent // 300) if spent >= 300 else min(40, (task.estimated_minutes or 0) // 12)
     on_time = 0
     if task.due_date and task.completed_at:
         deadline = _aware(task.due_date) + (timedelta(days=1) if task.all_day else timedelta(0))

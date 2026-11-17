@@ -57,7 +57,7 @@ def spawn_next(db: Session, task: Task) -> Optional[Task]:
     nxt = Task(
         title=task.title, description=task.description, priority=task.priority, status=Status.TODO,
         due_date=next_due(task.due_date, task.recurrence), all_day=task.all_day,
-        estimated_hours=task.estimated_hours, tags=task.tags, project_id=task.project_id, note_id=task.note_id,
+        estimated_minutes=task.estimated_minutes, tags=task.tags, project_id=task.project_id, note_id=task.note_id,
         user_id=task.user_id, recurrence=task.recurrence, reminder_minutes=task.reminder_minutes,
         difficulty=task.difficulty, assignee_id=task.assignee_id, assigned_notified_at=task.assigned_notified_at,
     )

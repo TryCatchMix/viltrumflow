@@ -109,7 +109,7 @@ def test_time_tracking(client, auth):
             db.get(Task, task_id).timer_started_at = datetime.now(timezone.utc) - timedelta(minutes=minutes)
             db.commit()
 
-    a = client.post(T, headers=auth, json={"title": "Informe", "estimated_hours": 2}).json()
+    a = client.post(T, headers=auth, json={"title": "Informe", "estimated_minutes": 120}).json()
     b = client.post(T, headers=auth, json={"title": "Correo"}).json()
     assert client.post(f"{T}/{a['id']}/timer/start", headers=auth).json()["timer_started_at"] is not None
     rewind(a["id"], 30)

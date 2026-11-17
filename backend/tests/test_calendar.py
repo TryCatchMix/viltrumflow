@@ -203,3 +203,14 @@ def test_choose_calendar(client, auth, google):
     assert google.events == {} and client.get(f"{T}/{t['id']}", headers=auth).json()["google_event_id"] is None
     assert client.post(f"{C}/sync", headers=auth).json()["synced"] == 1
     assert google.calendars_used[-1] == "trabajo%40x" and len(google.events) == 1
+
+
+def test_event_duration_follows_estimate(client, auth, google):
+    connect(client, auth)
+    t = client.post(T, headers=auth, json={"title": "Llamada", "all_day": False, "due_date": "2026-03-10T09:00:00Z", "estimated_minutes": 30}).json()
+    ev = google.events[t["google_event_id"]]
+    assert ev["start"]["dateTime"].startswith("2026-03-10T09:00") and ev["end"]["dateTime"].startswith("2026-03-10T09:30")
+    # alargarla en Google cambia la estimación de la tarea
+    ev["end"] = {"dateTime": "2026-03-10T10:15:00+00:00"}
+    client.post(f"{C}/sync", headers=auth)
+    assert client.get(f"{T}/{t['id']}", headers=auth).json()["estimated_minutes"] == 75

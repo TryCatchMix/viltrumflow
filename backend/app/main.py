@@ -10,8 +10,11 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from .config import settings
 from .database import SessionLocal, check_db_connection, init_db
-from .routers import attachments, auth, calendar, game, habits, pomodoro, notes, projects, reminders, search, stats, tasks, trash
+from .routers import attachments, auth, calendar, game, habits, pomodoro, push, review, notes, projects, reminders, search, stats, tasks, trash
+from datetime import datetime, timezone
+
 from .services import google_calendar as gcal
+from .services import notify
 from .services.reminders import run_tick
 
 logging.basicConfig(
@@ -21,20 +24,29 @@ logging.basicConfig(
 logger = logging.getLogger("viltrumflow")
 
 
-def _tick() -> None:
+def _tick(full: bool) -> None:
+    now = datetime.now(timezone.utc)
     with SessionLocal() as db:
-        run_tick(db)
-        gcal.pull_all(db)
+        notify.push_pomodoro(db, now)  # el fin de un Pomodoro se avisa con precisión de segundos
+        if full:
+            run_tick(db, now)
+            notify.push_notices(db, now)
+            gcal.pull_all(db)
 
 
 async def _scheduler() -> None:
-    """Cada minuto envía por correo los recordatorios y resúmenes que toquen y purga la papelera."""
+    """
+    Cada 15 s avisa del fin de los Pomodoro; cada minuto envía recordatorios (correo y push), resúmenes,
+    purga la papelera y trae cambios de Google Calendar.
+    """
+    n = 0
     while True:
         try:
-            await asyncio.to_thread(_tick)
+            await asyncio.to_thread(_tick, n % 4 == 0)
         except Exception:
             logger.exception("Fallo en el planificador de avisos")
-        await asyncio.sleep(60)
+        n += 1
+        await asyncio.sleep(15)
 
 
 @asynccontextmanager
@@ -101,6 +113,8 @@ app.include_router(attachments.router, prefix=f"{P}/attachments", tags=["Attachm
 app.include_router(habits.router, prefix=f"{P}/habits", tags=["Habits"])
 app.include_router(pomodoro.router, prefix=f"{P}/pomodoro", tags=["Pomodoro"])
 app.include_router(game.router, prefix=f"{P}/game", tags=["Game"])
+app.include_router(push.router, prefix=f"{P}/push", tags=["Push"])
+app.include_router(review.router, prefix=f"{P}/review", tags=["Review"])
 app.include_router(trash.router, prefix=f"{P}/trash", tags=["Trash"])
 app.include_router(reminders.router, prefix=f"{P}/reminders", tags=["Reminders"])
 app.include_router(calendar.router, prefix=f"{P}/calendar", tags=["Calendar"])
