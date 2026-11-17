@@ -25,6 +25,7 @@ export const routes: Routes = [
       { path: 'today', loadComponent: () => import('./pages/today.component').then(m => m.TodayComponent) },
       { path: 'focus', loadComponent: () => import('./pages/focus.component').then(m => m.FocusComponent) },
       { path: 'progress', loadComponent: () => import('./pages/progress.component').then(m => m.ProgressComponent) },
+      { path: 'missions', loadComponent: () => import('./pages/missions.component').then(m => m.MissionsComponent) },
       { path: 'review', loadComponent: () => import('./pages/review.component').then(m => m.ReviewComponent) },
       { path: 'trash', loadComponent: () => import('./pages/trash.component').then(m => m.TrashComponent) },
       { path: 'settings', loadComponent: () => import('./pages/settings.component').then(m => m.SettingsComponent) },

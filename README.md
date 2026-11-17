@@ -27,6 +27,7 @@ notas Markdown con `[[enlaces]]` al estilo Obsidian, vista de grafo y panel con 
 | **Estadísticas de rutinas** | Qué se cumple y qué no día a día, porcentaje, rachas, a qué hora se marcan, puntualidad frente a la hora prevista y cumplimiento por día de la semana |
 | **Pomodoro** | Reloj configurable (concentración, descansos, bloques por serie, inicio automático, sonido y aviso); cada bloque suma tiempo a la tarea elegida |
 | **Progreso** | Experiencia por tareas, rutinas y concentración; niveles, diez rangos del Imperio, logros y gráficos |
+| **Misiones y recompensas** | Tres misiones semanales con experiencia y monedas, protector de racha y premios propios que se canjean con monedas |
 | **Tareas** | Alta rápida, subtareas, comentarios, prioridad, etiquetas, fecha con o sin hora, filtros y agrupación |
 | **Recurrentes** | Cada día, días laborables, cada semana, cada 2 semanas, cada mes o cada año: al completar una tarea se crea la siguiente |
 | **Recordatorios** | Aviso en el navegador antes del vencimiento y, con SMTP configurado, por email; resumen diario por la mañana |
@@ -157,12 +158,31 @@ un bloque, su tiempo se suma a la tarea elegida.
 | Rutina | 5 / 10 / 15 / 25 según la dificultad, +1 por día de racha (máx. 10) |
 | Concentración | 1 por cada 5 minutos de bloque terminado |
 | Revisión semanal | 30, una vez por semana |
+| Misión semanal | 40 a 80 según la misión, más monedas |
 
 Reabrir una tarea o desmarcar una rutina retira su experiencia, y cada cosa puntúa una sola vez. En un proyecto
 compartido, la experiencia es para quien completa la tarea. Cada nivel pide 100 XP más que el anterior
 (nivel 2 a los 100, nivel 3 a los 300, nivel 4 a los 600…). Los rangos se alcanzan por nivel:
 Aspirante (1), Recluta (3), Soldado (5), Guerrero (8), Veterano (12), Centurión (16), Conquistador (20),
 Comandante (25), General (30) y Regente del Imperio (40).
+
+## Misiones, monedas y recompensas
+
+En **Misiones** (menú lateral):
+
+- **Misiones de la semana**: tres retos que se eligen el lunes según lo que sueles hacer (un 20 % por encima de tu
+  media de las cuatro semanas anteriores, con un mínimo). Por ejemplo «Completa 8 tareas», «Completa 2 tareas difíciles
+  o épicas», «Termina 4 tareas antes de su fecha», «Cumple todas tus rutinas 3 días», «Concéntrate 150 minutos» o «Haz
+  la revisión de esta semana». Si tienes rutinas, siempre hay una de rutinas. Al completarlas se reclama su
+  recompensa (experiencia y monedas); reclamar las tres abre el **cofre semanal**, que regala un protector de racha.
+- **Monedas**: 1 por cada 10 XP ganados, más las de las misiones. Si se retira experiencia (al reabrir una tarea o
+  desmarcar una rutina), también se retiran sus monedas.
+- **Protector de racha**: cuesta 50 monedas y se pueden tener 2. Cuando termina un día en el que no cumpliste una
+  rutina diaria que llevaba racha, se gasta solo y la racha se salva: ese día no la alarga, pero tampoco la rompe, y en
+  las estadísticas aparece como «salvada» (no cuenta ni a favor ni en contra del cumplimiento). Si después marcas ese
+  día como hecho, el protector se devuelve. Las rutinas «N veces por semana» no lo necesitan.
+- **Recompensas propias**: premios que te pones tú («una tarde libre», «comprarme el libro») con un precio en monedas;
+  pueden repetirse o ser de una sola vez. Un canje se puede deshacer desde el historial de movimientos.
 
 ## Recordatorios y email
 
@@ -288,13 +308,13 @@ backend/
   app/
     main.py  config.py  database.py  models.py  schemas.py  security.py  deps.py
     routers/    auth · tasks · projects · notes · habits · pomodoro · game · stats · search · reminders · trash · attachments · calendar
-    services/   markdown · notes · vault (importar/exportar) · access (permisos) · trash · recurrence · reminders · mailer · google_calendar
+    services/   markdown · notes · vault (importar/exportar) · access (permisos) · trash · recurrence · reminders · notify (push) · mailer · game · economy · missions · google_calendar
   migrations/   versiones de Alembic
   tests/
 frontend/src/app/
   core/      API, sesión, interceptor (renovación de token), tema, avisos, borradores sin conexión, utilidades
   layout/    barra lateral y buscador rápido
-  pages/     dashboard · today · focus · progress · tasks · kanban · projects · notes · graph · calendar · trash · settings · auth
+  pages/     dashboard · today · focus · review · missions · progress · tasks · kanban · projects · notes · graph · calendar · trash · settings · auth
   shared/    editor, vista Markdown, gráficos, panel de tarea, iconos
 ```
 
@@ -310,6 +330,7 @@ Todas las rutas cuelgan de `/api/v1` y, salvo registro e inicio de sesión, requ
 | Rutinas | `GET/POST /habits` · `PUT/DELETE /habits/{id}` · `GET /habits/day` · `PUT /habits/{id}/check` · `GET /habits/stats` |
 | Avisos push y revisión | `GET /push/key` · `POST /push/subscribe` · `POST /push/unsubscribe` · `POST /push/test` · `GET/PUT /review` · `POST /review/complete` · `GET /review/today` · `PUT /review/goal` |
 | Pomodoro y progreso | `GET/PUT /pomodoro/settings` · `POST /pomodoro/sessions` · `GET /pomodoro/stats` · `GET /game/profile` · `GET /game/history` |
+| Misiones y recompensas | `GET /game/wallet` · `POST /game/freezes/buy` · `GET /game/missions` · `POST /game/missions/{key}/claim` · `GET/POST /game/rewards` · `PUT/DELETE /game/rewards/{id}` · `POST /game/rewards/{id}/redeem` · `GET /game/coins/history` · `DELETE /game/coins/{id}` |
 | Papelera | `GET/DELETE /trash` · `POST /trash/{note\|task}/{id}/restore` · `DELETE /trash/{note\|task}/{id}` |
 | Notas | `GET/POST /notes` · `GET/PUT/DELETE /notes/{id}` · `GET /notes/by-title/{título}` · `POST /notes/daily` · `GET /notes/graph` · `GET /notes/tags` · `GET /notes/checklist` · `PATCH /notes/{id}/checklist` · `GET /notes/export` · `POST /notes/import` |
 | Otros | `GET /stats/overview` · `GET /search` · `POST /reminders/poll` · `GET /reminders/status` |

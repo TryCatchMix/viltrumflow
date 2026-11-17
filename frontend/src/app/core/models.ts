@@ -99,10 +99,10 @@ export interface Habit {
 }
 export type HabitInput = Partial<Pick<Habit, 'title' | 'days' | 'target_time' | 'difficulty' | 'color' | 'is_archived' | 'target_count' | 'unit' | 'weekly_target' | 'remind'>>;
 export interface HabitDayItem extends Habit { checked: boolean; count: number; checked_at?: string | null; streak: number; week_done: number; xp: number; }
-export type HabitState = 'done' | 'missed' | 'off' | 'pending' | 'partial' | 'free';
+export type HabitState = 'done' | 'missed' | 'off' | 'pending' | 'partial' | 'free' | 'frozen';
 export interface HabitStat {
   id: number; title: string; color: string; target_time?: string | null; days: string; scheduled: number; done: number;
-  period: 'day' | 'week'; weekly_target?: number | null; target_count: number; unit: string;
+  period: 'day' | 'week'; weekly_target?: number | null; target_count: number; unit: string; frozen: number;
   rate: number | null; streak: number; best_streak: number; avg_minute: number | null; on_time_rate: number | null; states: HabitState[];
 }
 export interface HabitStats {
@@ -136,11 +136,24 @@ export interface GameProfile {
   xp: number; level: number; level_start_xp: number; next_level_xp: number; rank_index: number; rank: string;
   next_rank: string | null; next_rank_level: number | null; ranks: Rank[];
 }
-export type XpKind = 'task' | 'habit' | 'focus' | 'review';
-export const XP_KIND_LABEL: Record<XpKind, string> = { task: 'Tareas', habit: 'Rutinas', focus: 'Concentración', review: 'Revisión semanal' };
+export type XpKind = 'task' | 'habit' | 'focus' | 'review' | 'mission';
+export const XP_KIND_LABEL: Record<XpKind, string> = { task: 'Tareas', habit: 'Rutinas', focus: 'Concentración', review: 'Revisión semanal', mission: 'Misiones' };
 export interface GameHistory {
-  daily: { date: string; task: number; habit: number; focus: number; review: number; total: number }[];
+  daily: { date: string; task: number; habit: number; focus: number; review: number; mission: number; total: number }[];
   by_kind: Record<XpKind, number>; today_xp: number; week_xp: number;
   recent: { kind: XpKind; amount: number; detail: string; created_at: string }[];
   achievements: { id: string; name: string; description: string; progress: number; goal: number; unlocked: boolean }[];
 }
+
+// ---------- Misiones, monedas y recompensas ----------
+export interface Wallet {
+  coins: number; next_coin_in: number; xp_per_coin: number; freezes: number; max_freezes: number; freeze_price: number;
+  recent_freezes: { habit: string; day: string }[];
+}
+export interface Mission {
+  key: string; title: string; hint: string; target: number; progress: number; reward_xp: number; reward_coins: number;
+  claimed: boolean; claimable: boolean;
+}
+export interface Missions { week_start: string; week_end: string; missions: Mission[]; chest_claimed: boolean; }
+export interface RewardItem { id: number; title: string; cost: number; emoji: string; repeatable: boolean; is_archived: boolean; times_redeemed: number; available: boolean; }
+export interface CoinEntry { id: number; amount: number; reason: 'mission' | 'chest' | 'reward' | 'freeze'; detail: string; created_at: string; }

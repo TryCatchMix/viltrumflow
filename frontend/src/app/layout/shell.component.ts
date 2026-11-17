@@ -43,7 +43,9 @@ import { CommandPaletteComponent } from './command-palette.component';
       @if (game.profile(); as g) {
         <a class="level" routerLink="/progress" [title]="g.xp + ' XP · faltan ' + (g.next_level_xp - g.xp) + ' para el nivel ' + (g.level + 1)">
           <app-rank-insignia [rank]="g.rank_index" [size]="26" [label]="g.rank" />
-          <div><div class="row"><strong class="truncate">{{ g.rank }}</strong><span class="spacer"></span><span class="muted">Nv. {{ g.level }}</span></div>
+          <div><div class="row"><strong class="truncate">{{ g.rank }}</strong><span class="spacer"></span>
+              @if (game.wallet(); as w) { <span class="coins" [title]="w.coins + ' monedas' + (w.freezes ? ' · ' + w.freezes + ' protector(es) de racha' : '')"><app-icon name="coin" [size]="12" />{{ w.coins }}</span> }
+              <span class="muted">Nv. {{ g.level }}</span></div>
             <div class="xpbar"><span [style.width.%]="game.progress()"></span></div></div>
         </a>
       }
@@ -110,6 +112,7 @@ import { CommandPaletteComponent } from './command-palette.component';
     .new { width: 100%; }
     .level { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border); color: var(--text); font-size: 12.5px;
       &:hover { text-decoration: none; border-color: var(--text-3); } > div { flex: 1; min-width: 0; display: grid; gap: 4px; } strong { font-weight: 500; } }
+    .coins { display: inline-flex; gap: 3px; align-items: center; margin-right: 6px; font-variant-numeric: tabular-nums; color: var(--text-2); app-icon { color: var(--warning); } }
     .xpbar { height: 4px; border-radius: 2px; background: var(--surface-3); overflow: hidden; span { display: block; height: 100%; background: var(--accent); transition: width .4s; } }
     .pomo { padding: 6px 9px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent-text); font-size: 13px; &:hover { text-decoration: none; }
       &.break { background: color-mix(in srgb, var(--series-3) 18%, transparent); color: var(--text); } .t { font-variant-numeric: tabular-nums; font-weight: 600; } .muted { font-size: 12px; } }
@@ -162,6 +165,7 @@ export class ShellComponent implements OnInit, OnDestroy {
     { path: '/projects', icon: 'folder', label: 'Proyectos' },
     { path: '/focus', icon: 'target', label: 'Enfoque' },
     { path: '/review', icon: 'history', label: 'Revisión semanal' },
+    { path: '/missions', icon: 'flag', label: 'Misiones' },
     { path: '/progress', icon: 'shield', label: 'Progreso', gap: true },
     { path: '/notes', icon: 'note', label: 'Notas' },
     { path: '/graph', icon: 'graph', label: 'Grafo', gap: true },

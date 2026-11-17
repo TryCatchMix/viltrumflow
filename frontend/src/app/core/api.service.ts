@@ -5,7 +5,7 @@ import { map, tap } from 'rxjs/operators';
 import { Outbox, asNote, asTask } from './outbox';
 import { environment } from '../../environments/environment';
 import {
-  GameHistory, GameProfile, Goal, ReviewToday, WeeklyReview, Habit, HabitDayItem, HabitInput, HabitStats, PomodoroSettings, PomodoroStats,
+  CoinEntry, Missions, RewardItem, Wallet, GameHistory, GameProfile, Goal, ReviewToday, WeeklyReview, Habit, HabitDayItem, HabitInput, HabitStats, PomodoroSettings, PomodoroStats,
   CalendarEvent, CalendarInfo, CalendarStatus, ChecklistItem, Mention, NoteVersion, Comment, Graph, ImportResult, Member, Note, NoteSummary, Overview, Project,
   Reminder, Role, SearchResult, TrashItem, Status, TagCount, Task, TaskInput,
 } from './models';
@@ -178,6 +178,24 @@ export class ApiService {
   }
   reviewToday() { return this.http.get<ReviewToday>(`${this.base}/review/today`); }
   toggleGoal(week_start: string, index: number, done: boolean) { return this.http.put<void>(`${this.base}/review/goal`, { week_start, index, done }); }
+
+  // Misiones, monedas y recompensas
+  wallet() { return this.http.get<Wallet>(`${this.base}/game/wallet`); }
+  buyFreeze() { return this.http.post<Wallet>(`${this.base}/game/freezes/buy`, null).pipe(tap(() => this.xpChanged.next())); }
+  missions() { return this.http.get<Missions>(`${this.base}/game/missions`); }
+  claimMission(key: string) {
+    return this.http.post<{ xp_gained: number; coins_gained: number; chest: boolean; wallet: Wallet }>(`${this.base}/game/missions/${key}/claim`, null)
+      .pipe(tap(() => this.xpChanged.next()));
+  }
+  rewards(includeArchived = false) { return this.http.get<RewardItem[]>(`${this.base}/game/rewards`, { params: params({ include_archived: includeArchived }) }); }
+  createReward(data: Partial<RewardItem>) { return this.http.post<RewardItem>(`${this.base}/game/rewards`, data); }
+  updateReward(id: number, data: Partial<RewardItem>) { return this.http.put<RewardItem>(`${this.base}/game/rewards/${id}`, data); }
+  deleteReward(id: number) { return this.http.delete<void>(`${this.base}/game/rewards/${id}`); }
+  redeemReward(id: number) {
+    return this.http.post<{ entry_id: number; reward: RewardItem; wallet: Wallet }>(`${this.base}/game/rewards/${id}/redeem`, null).pipe(tap(() => this.xpChanged.next()));
+  }
+  coinHistory() { return this.http.get<CoinEntry[]>(`${this.base}/game/coins/history`); }
+  undoRedemption(entryId: number) { return this.http.delete<void>(`${this.base}/game/coins/${entryId}`).pipe(tap(() => this.xpChanged.next())); }
 
   // Progreso
   gameProfile() { return this.http.get<GameProfile>(`${this.base}/game/profile`); }
