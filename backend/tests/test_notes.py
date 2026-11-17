@@ -143,3 +143,16 @@ def test_unlinked_mentions(client, auth):
     assert client.get(M, headers=auth).json() == []
     assert client.post(f"{M}/{a['id']}/link", headers=auth).status_code == 409
     assert len(client.get(f"{N}/{a['id']}/versions", headers=auth).json()) == 1  # el cambio se puede deshacer
+
+
+def test_update_with_stale_base_is_rejected(client, auth):
+    """Un cambio escrito sobre una versión antigua (p. ej. sin conexión) no pisa lo que se guardó después."""
+    n = client.post(N, headers=auth, json={"title": "Compartida entre dispositivos", "content": "v1"}).json()
+    ok = client.put(f"{N}/{n['id']}", headers=auth, json={"content": "v2", "base_updated_at": n["updated_at"]})
+    assert ok.status_code == 200
+    stale = client.put(f"{N}/{n['id']}", headers=auth, json={"content": "local", "base_updated_at": n["updated_at"]})
+    assert stale.status_code == 409
+    assert client.get(f"{N}/{n['id']}", headers=auth).json()["content"] == "v2"
+    fresh = client.put(f"{N}/{n['id']}", headers=auth, json={"content": "v3", "base_updated_at": ok.json()["updated_at"]})
+    assert fresh.status_code == 200 and fresh.json()["content"] == "v3"
+    assert client.put(f"{N}/{n['id']}", headers=auth, json={"content": "sin base"}).status_code == 200  # sin base no se comprueba

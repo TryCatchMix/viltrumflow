@@ -106,7 +106,7 @@ test('sin conexión: crear tareas y notas nuevas, que se envían al reconectar',
   await expect(page.getByRole('status').filter({ hasText: 'Sin conexión' })).toBeVisible();
 
   await context.setOffline(false);
-  await expect(toast(page).filter({ hasText: 'Sincronizados 2 elementos' })).toBeVisible();
+  await expect(toast(page).filter({ hasText: 'Sincronizados 2 cambios' })).toBeVisible();
   await expect(page).toHaveURL(/notes\/\d+$/);  // la nota abierta pasa a su id definitivo
   await expect(page.locator('.cm-content')).toContainText('Idea apuntada en el tren');
 
@@ -118,4 +118,31 @@ test('sin conexión: crear tareas y notas nuevas, que se envían al reconectar',
   expect(tasks[0]).toMatchObject({ title: 'Comprar billetes de tren', priority: 'high', tags: ['viaje'] });
   expect(tasks[0].due_date).not.toBeNull();
   expect(await page.evaluate(() => localStorage.getItem('vf-outbox'))).toBe('{"tasks":[],"notes":[]}');
+});
+
+test('sin conexión: volver a tener red con la nota abierta tampoco pisa un cambio hecho en otro dispositivo', async ({ browser, request }) => {
+  const { page, context, api } = await register(browser);
+  await page.goto('/notes');
+  await waitForServiceWorker(page);
+  await openNote(page, 'Bienvenido');
+
+  await context.setOffline(true);
+  await typeAtEnd(page, '\nEscrito aquí sin red.');
+  await expect(page.locator('.status')).toContainText('Sin conexión');
+
+  const token = await page.evaluate(() => localStorage.getItem('vf-access'));
+  const headers = { Authorization: `Bearer ${token}` };
+  const note = await (await request.get('http://localhost:8010/api/v1/notes/by-title/Bienvenido', { headers })).json();
+  await request.put(`http://localhost:8010/api/v1/notes/${note.id}`, { headers, data: { content: 'Versión del otro dispositivo' } });
+
+  await context.setOffline(false);  // la nota sigue abierta en el editor
+  await expect(toast(page).filter({ hasText: 'se ha guardado como copia' })).toBeVisible();
+  await expect(page.locator('.cm-content')).toHaveText('Versión del otro dispositivo');  // el editor pasa a la versión del servidor
+  expect((await api('GET', '/notes/by-title/Bienvenido')).content).toBe('Versión del otro dispositivo');
+  const copy = (await api('GET', '/notes')).find((n: any) => n.title === 'Bienvenido (copia sin conexión)');
+  expect((await api('GET', `/notes/${copy.id}`)).content).toContain('Escrito aquí sin red.');
+
+  // y seguir escribiendo después guarda con normalidad sobre la versión nueva
+  await typeAtEnd(page, '\nSigo aquí.');
+  await expect.poll(async () => (await api('GET', '/notes/by-title/Bienvenido')).content).toBe('Versión del otro dispositivo\nSigo aquí.');
 });

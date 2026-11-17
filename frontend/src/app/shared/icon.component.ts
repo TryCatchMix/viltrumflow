@@ -43,6 +43,12 @@ const ICONS: Record<string, string> = {
   stop: 'M7 7h10v10H7z',
   history: 'M4 12a8 8 0 1 0 2.5-5.8L4 8.5|M4 4v4.5h4.5|M12 8v4l3 2',
   template: 'M5 4h14v5H5z|M5 12h6v8H5z|M14 12h5|M14 16h5|M14 20h5',
+  flame: 'M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.2 2-4 .2 1.6 1 2.4 2 2.6C10.5 9 11 6 12 3z',
+  target: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z|M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z|M12 11.9v.2',
+  shield: 'M12 3l7.5 3v6c0 4.5-3 7.6-7.5 9-4.5-1.4-7.5-4.5-7.5-9V6z',
+  pause: 'M8 6v12|M16 6v12',
+  skip: 'M6 6l8 6-8 6z|M17 6v12',
+  lock: 'M7 11h10v8H7z|M9 11V8a3 3 0 0 1 6 0v3',
   panel: 'M4 5h16v14H4z|M15 5v14',
 };
 

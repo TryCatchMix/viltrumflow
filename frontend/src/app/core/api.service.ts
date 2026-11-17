@@ -5,6 +5,7 @@ import { map, tap } from 'rxjs/operators';
 import { Outbox, asNote, asTask } from './outbox';
 import { environment } from '../../environments/environment';
 import {
+  GameHistory, GameProfile, Habit, HabitDayItem, HabitInput, HabitStats, PomodoroSettings, PomodoroStats,
   CalendarEvent, CalendarInfo, CalendarStatus, ChecklistItem, Mention, NoteVersion, Comment, Graph, ImportResult, Member, Note, NoteSummary, Overview, Project,
   Reminder, Role, SearchResult, TrashItem, Status, TagCount, Task, TaskInput,
 } from './models';
@@ -28,6 +29,8 @@ export class ApiService {
   /** Se emite cuando cambian tareas o notas, para que las vistas abiertas se refresquen. */
   readonly tasksChanged = new Subject<void>();
   readonly notesChanged = new Subject<void>();
+  /** La experiencia puede haber cambiado (rutina marcada); las tareas avisan por `tasksChanged`. */
+  readonly xpChanged = new Subject<void>();
   private t = <T>(o: Observable<T>) => o.pipe(tap(() => this.tasksChanged.next()));
   private n = <T>(o: Observable<T>) => o.pipe(tap(() => this.notesChanged.next()));
 
@@ -95,13 +98,15 @@ export class ApiService {
     }
     return this.http.get<Note>(`${this.base}/notes/${id}`);
   }
+  /** Lee la nota directamente del servidor, sin pasar por la copia guardada para uso sin conexión. */
+  noteFresh(id: number) { return this.http.get<Note>(`${this.base}/notes/${id}`, { headers: { 'ngsw-bypass': 'true' } }); }
   /** Nota creada solo en el dispositivo, para cuando no hay conexión. */
   createLocalNote(title: string, folder = ''): Note { const n = asNote(this.outbox.addNote(title, '', folder)); this.notesChanged.next(); return n; }
   noteByTitle(title: string) { return this.http.get<Note>(`${this.base}/notes/by-title/${encodeURIComponent(title)}`); }
   createNote(data: { title: string; content?: string; folder?: string; template_id?: number; day?: string; time?: string }) { return this.n(this.http.post<Note>(`${this.base}/notes`, data)); }
-  updateNote(id: number, data: Partial<Pick<Note, 'title' | 'content' | 'folder' | 'is_pinned'>>) {
+  updateNote(id: number, data: Partial<Pick<Note, 'title' | 'content' | 'folder' | 'is_pinned'>> & { base_updated_at?: string }) {
     if (id < 0) {
-      const { is_pinned, ...local } = data;
+      const { is_pinned, base_updated_at, ...local } = data;
       return this.n(of(asNote(this.outbox.updateNote(id, local)!)));
     }
     return this.n(this.http.put<Note>(`${this.base}/notes/${id}`, data));
@@ -140,6 +145,29 @@ export class ApiService {
   linkMention(noteId: number, sourceId: number) { return this.n(this.http.post<Note>(`${this.base}/notes/${noteId}/mentions/${sourceId}/link`, null)); }
   startTimer(taskId: number) { return this.t(this.http.post<Task>(`${this.base}/tasks/${taskId}/timer/start`, null)); }
   stopTimer(taskId: number) { return this.t(this.http.post<Task>(`${this.base}/tasks/${taskId}/timer/stop`, null)); }
+
+  // Rutinas
+  habits(includeArchived = false) { return this.http.get<Habit[]>(`${this.base}/habits`, { params: params({ include_archived: includeArchived }) }); }
+  habitsOfDay(day: string) { return this.http.get<HabitDayItem[]>(`${this.base}/habits/day`, { params: params({ day }) }); }
+  createHabit(data: HabitInput) { return this.http.post<Habit>(`${this.base}/habits`, data); }
+  updateHabit(id: number, data: HabitInput) { return this.http.put<Habit>(`${this.base}/habits/${id}`, data); }
+  deleteHabit(id: number) { return this.http.delete<void>(`${this.base}/habits/${id}`); }
+  checkHabit(id: number, day: string, checked: boolean) {
+    return this.http.put<{ item: HabitDayItem; xp_gained: number }>(`${this.base}/habits/${id}/check`, { day, checked }).pipe(tap(() => this.xpChanged.next()));
+  }
+  habitStats(days: number) { return this.http.get<HabitStats>(`${this.base}/habits/stats`, { params: params({ days }) }); }
+
+  // Pomodoro
+  pomodoroSettings() { return this.http.get<PomodoroSettings>(`${this.base}/pomodoro/settings`); }
+  savePomodoroSettings(s: PomodoroSettings) { return this.http.put<PomodoroSettings>(`${this.base}/pomodoro/settings`, s); }
+  logPomodoro(seconds: number, task_id: number | null) {
+    return this.t(this.http.post<{ xp_gained: number; task_title?: string | null }>(`${this.base}/pomodoro/sessions`, { seconds, task_id }));
+  }
+  pomodoroStats(days: number) { return this.http.get<PomodoroStats>(`${this.base}/pomodoro/stats`, { params: params({ days }) }); }
+
+  // Progreso
+  gameProfile() { return this.http.get<GameProfile>(`${this.base}/game/profile`); }
+  gameHistory(days: number) { return this.http.get<GameHistory>(`${this.base}/game/history`, { params: params({ days }) }); }
 
   // Estadísticas y búsqueda
   overview(days: number) {

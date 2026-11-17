@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
-import { Comment, Member, PRIORITIES, PRIORITY_LABEL, Priority, Project, RECURRENCE_LABEL, REMINDER_OPTIONS, Recurrence, STATUS_LABEL, Status, Subtask, Task } from '../core/models';
+import { Comment, DIFFICULTY_LABEL, Member, PRIORITIES, PRIORITY_LABEL, Priority, Project, RECURRENCE_LABEL, REMINDER_OPTIONS, Recurrence, STATUS_LABEL, Status, Subtask, Task } from '../core/models';
 import { ToastService } from '../core/toast.service';
 import { formatDuration, relativeTime, spentSeconds, taskDay, taskTime, toDue } from '../core/util';
 import { IconComponent } from './icon.component';
@@ -43,6 +43,14 @@ import { TaskDialogService } from './task-dialog.service';
               @for (p of priorities; track p) { <option [value]="p">{{ priorityLabel[p] }}</option> }
             </select>
           </label>
+          <label class="field">Dificultad
+            <select class="input" name="difficulty" [(ngModel)]="f.difficulty" title="Decide la experiencia que da completarla">
+              @for (d of [1, 2, 3, 4]; track d) { <option [ngValue]="d">{{ difficultyLabel[d] }} · {{ xpBase[d] }} XP</option> }
+            </select>
+          </label>
+          <label class="field">Estimación (horas)
+            <input class="input" type="number" min="0" name="hours" [(ngModel)]="f.estimated_hours" />
+          </label>
           <label class="field">Fecha
             <input class="input" type="date" name="day" [(ngModel)]="f.day" />
           </label>
@@ -74,9 +82,6 @@ import { TaskDialogService } from './task-dialog.service';
               </select>
             </label>
           }
-          <label class="field">Estimación (horas)
-            <input class="input" type="number" min="0" name="hours" [(ngModel)]="f.estimated_hours" />
-          </label>
         </div>
         @if (f.recurrence !== 'none') {
           <p class="note"><app-icon name="repeat" [size]="13" /> Al completarla se creará la siguiente{{ f.day ? '' : ' (contando desde hoy)' }}.</p>
@@ -183,6 +188,8 @@ export class TaskDialogComponent implements OnDestroy {
   priorities = PRIORITIES;
   statusLabel = STATUS_LABEL;
   priorityLabel = PRIORITY_LABEL;
+  difficultyLabel = DIFFICULTY_LABEL;
+  xpBase: Record<number, number> = { 1: 10, 2: 20, 3: 40, 4: 80 };
   recurrences = Object.keys(RECURRENCE_LABEL) as Recurrence[];
   recurrenceLabel = RECURRENCE_LABEL;
   reminders = REMINDER_OPTIONS;
@@ -228,6 +235,7 @@ export class TaskDialogComponent implements OnDestroy {
           day: taskDay(t) ?? '', time: taskTime(t), project_id: t.project_id ?? null,
           estimated_hours: t.estimated_hours ?? null, tags: t.tags.join(', '),
           recurrence: t.recurrence ?? 'none', reminder_minutes: t.reminder_minutes ?? null, assignee_id: t.assignee_id ?? null,
+          difficulty: t.difficulty ?? 2,
         };
         this.readOnly.set(t.can_edit === false);
         this.loadMembers(t.project_id ?? null);
@@ -253,7 +261,7 @@ export class TaskDialogComponent implements OnDestroy {
   private blank() {
     return { title: '', description: '', status: 'todo' as Status, priority: 'medium' as Priority, day: '', time: '',
       project_id: null as number | null, estimated_hours: null as number | null, tags: '',
-      recurrence: 'none' as Recurrence, reminder_minutes: null as number | null, assignee_id: null as number | null };
+      recurrence: 'none' as Recurrence, reminder_minutes: null as number | null, assignee_id: null as number | null, difficulty: 2 };
   }
 
   timer(start: boolean) {
@@ -285,6 +293,7 @@ export class TaskDialogComponent implements OnDestroy {
       tags: this.f.tags.split(',').map(t => t.trim()).filter(Boolean),
       recurrence: this.f.recurrence, reminder_minutes: this.f.day ? this.f.reminder_minutes : null,
       assignee_id: this.f.project_id ? this.f.assignee_id : null,
+      difficulty: this.f.difficulty,
     };
     this.saving.set(true);
     const req = this.task ? this.api.updateTask(this.task.id, data) : this.api.createTask(data);

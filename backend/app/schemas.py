@@ -311,6 +311,9 @@ class NoteUpdate(BaseModel):
     content: Optional[str] = Field(None, max_length=1_000_000)
     folder: Optional[str] = Field(None, max_length=300)
     is_pinned: Optional[bool] = None
+    # Versión (updated_at) sobre la que se escribió el cambio. Si se envía y la nota ya es otra, se rechaza con 409:
+    # así un texto escrito sin conexión nunca pisa lo que se cambió entretanto en otro dispositivo.
+    base_updated_at: Optional[datetime] = None
 
     @field_validator("title")
     @classmethod

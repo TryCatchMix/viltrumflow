@@ -1,5 +1,5 @@
 from collections import Counter
-from datetime import date
+from datetime import date, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
@@ -208,7 +208,12 @@ def get_note(note_id: int, user: User = Depends(get_current_user), db: Session =
 @router.put("/{note_id}", response_model=schemas.NoteOut)
 def update_note(note_id: int, data: schemas.NoteUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     note = _get(db, user, note_id)
-    values = {k: v for k, v in data.model_dump(exclude_unset=True).items() if v is not None}
+    if data.base_updated_at is not None:
+        current = note.updated_at if note.updated_at.tzinfo else note.updated_at.replace(tzinfo=timezone.utc)
+        base = data.base_updated_at if data.base_updated_at.tzinfo else data.base_updated_at.replace(tzinfo=timezone.utc)
+        if current != base:
+            raise HTTPException(409, "La nota ha cambiado desde la versión sobre la que escribiste")
+    values = {k: v for k, v in data.model_dump(exclude_unset=True, exclude={"base_updated_at"}).items() if v is not None}
     new_title = values.get("title")
     renamed = new_title is not None and new_title != note.title
     if renamed:

@@ -58,8 +58,17 @@ export class OfflineService {
 
   /** Envía los borradores pendientes. */
   async sync(): Promise<void> {
-    if (this.syncing || !navigator.onLine) return;
+    if (!navigator.onLine) return;
+    if (this.syncing) { this.again = true; return this.running ?? undefined; }  // se repetirá al terminar la pasada en curso
     this.syncing = true;
+    this.running = this.pass();
+    await this.running;
+  }
+
+  private again = false;
+  private running: Promise<void> | null = null;
+
+  private async pass(): Promise<void> {
     let done = 0, copies = 0;
     try {
       done += await this.sendOutbox();
@@ -67,23 +76,24 @@ export class OfflineService {
         const id = Number(key);
         if (id === this.activeId) continue;
         try {
-          const server = await firstValueFrom(this.api.note(id)).catch(e => (e.status === 404 ? null : Promise.reject(e)));
-          if (server && (server.updated_at === draft.base || server.content === draft.content)) {
-            if (server.content !== draft.content) await firstValueFrom(this.api.updateNote(id, { content: draft.content }));
-            done++;
-          } else {
-            // Cambió en otro dispositivo (o se eliminó): no se pisa, se guarda como copia
-            await this.saveCopy(draft);
-            copies++;
+          // El servidor rechaza (409) el envío si la nota ya no es la versión sobre la que se escribió
+          const sent = await firstValueFrom(this.api.updateNote(id, { content: draft.content, base_updated_at: draft.base }))
+            .then(() => true, e => ([404, 409].includes(e.status) ? false : Promise.reject(e)));
+          if (sent) done++;
+          else {
+            const server = await firstValueFrom(this.api.noteFresh(id)).catch(e => (e.status === 404 ? null : Promise.reject(e)));
+            if (server?.content === draft.content) done++;  // mismo texto: no hay nada que conservar aparte
+            else { await this.saveCopy(draft); copies++; }  // cambió en otro dispositivo (o se eliminó): se guarda como copia
           }
           this.remove(id);
         } catch (e) {
           if (isOffline(e)) break;  // sigue sin red: se reintenta más tarde
         }
       }
-    } finally { this.syncing = false; }
+    } finally { this.syncing = false; this.running = null; }
     if (copies) this.toast.show(`${copies === 1 ? 'Una nota había cambiado' : copies + ' notas habían cambiado'} en otro sitio: tu versión sin conexión se ha guardado como copia`, 'info', 9000);
-    else if (done) this.toast.success(done === 1 ? 'Sincronizado 1 elemento creado sin conexión' : `Sincronizados ${done} elementos creados sin conexión`);
+    else if (done) this.toast.success(done === 1 ? 'Sincronizado 1 cambio hecho sin conexión' : `Sincronizados ${done} cambios hechos sin conexión`);
+    if (this.again) { this.again = false; await this.sync(); }
   }
 
   /** Envía lo creado sin conexión. Devuelve cuántos elementos llegaron al servidor. */

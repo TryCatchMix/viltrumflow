@@ -375,7 +375,7 @@ export class NotesComponent implements OnDestroy {
 
   ngOnDestroy() { this.flush(); this.offline.activeId = null; removeEventListener('online', this.onOnline); }
   /** Al volver la red, envía lo que quedó pendiente de la nota abierta. */
-  private onOnline = () => { const n = this.note(); if (n && this.offline.get(n.id)) { this.dirty = true; this.flush(); } };
+  private onOnline = () => { const n = this.note(); if (n && n.id > 0) this.reconcile(n.id); };
   @HostListener('window:beforeunload') onUnload() { this.flush(); }
 
   private loadList(initial = false) {
@@ -406,8 +406,9 @@ export class NotesComponent implements OnDestroy {
         // Texto escrito sin conexión y aún no enviado: tiene prioridad sobre lo que devuelve el servidor
         const draft = this.offline.get(n.id);
         if (draft && draft.content !== n.content) {
-          if (n.updated_at === draft.base || !navigator.onLine) { this.content.set(draft.content); this.dirty = true; this.flush(); }
-          else { this.offline.activeId = null; this.offline.sync().then(() => { this.offline.activeId = n.id; this.loadList(); }); }  // cambió en otro sitio: copia aparte
+          // Se muestra lo escrito aquí; al enviarlo se comprueba si la nota cambió en otro sitio (y entonces va a una copia)
+          this.content.set(draft.content);
+          this.reconcile(n.id);
         } else if (draft) this.offline.remove(n.id);
         if (this.route.snapshot.queryParamMap.get('edit')) {
           if (this.mode() === 'preview') this.mode.set('edit');
@@ -457,6 +458,16 @@ export class NotesComponent implements OnDestroy {
     if (!n || !this.dirty) return;
     this.dirty = false;
     const sent = this.content();
+    if (n.id > 0 && this.offline.get(n.id)) {
+      // Hay texto escrito sin conexión: antes de enviarlo hay que comprobar que la nota no cambió en otro sitio
+      this.offline.save(n.id, n.title, sent, n.updated_at);
+      this.reconcile(n.id);
+      return;
+    }
+    this.send(n, sent);
+  }
+
+  private send(n: Note, sent: string) {
     this.status.set('Guardando…');
     this.api.updateNote(n.id, { content: sent }).subscribe({
       next: saved => {
@@ -475,6 +486,45 @@ export class NotesComponent implements OnDestroy {
         }
         if (this.note()?.id === n.id) { this.dirty = true; this.status.set('Error al guardar'); }
         this.toast.error(e, 'No se pudo guardar la nota');
+      },
+    });
+  }
+
+  /**
+   * Envía el borrador escrito sin conexión de la nota abierta, pero solo si el servidor sigue teniendo la
+   * versión sobre la que se escribió. Si cambió en otro dispositivo, lo local se guarda como copia aparte
+   * y el editor pasa a mostrar la versión del servidor.
+   */
+  private reconcile(id: number) {
+    const draft = this.offline.get(id);
+    if (!draft) return;
+    if (!navigator.onLine) { if (this.note()?.id === id) this.status.set('Sin conexión · guardado en este dispositivo'); return; }
+    this.status.set('Guardando…');
+    this.api.updateNote(id, { content: draft.content, base_updated_at: draft.base }).subscribe({
+      next: saved => {
+        this.offline.remove(id);
+        if (this.note()?.id !== id) { this.loadList(); return; }
+        this.apply({ ...saved, content: this.content() });
+        if (this.content() !== draft.content) { this.dirty = true; this.flush(); }  // se siguió escribiendo mientras tanto
+        else if (!this.dirty) this.status.set('Guardado');
+        this.loadList();
+      },
+      error: e => {
+        if (isOffline(e)) { if (this.note()?.id === id) this.status.set('Sin conexión · guardado en este dispositivo'); return; }
+        if (e.status !== 409 && e.status !== 404) { this.status.set('Error al guardar'); this.toast.error(e, 'No se pudo guardar la nota'); return; }
+        // Cambió en otro dispositivo: la sincronización general guarda lo local como copia…
+        const wasActive = this.offline.activeId;
+        this.offline.activeId = null;
+        this.offline.sync().then(() => {
+          this.offline.activeId = wasActive === id ? this.note()?.id ?? null : wasActive;
+          this.loadList();
+          if (this.note()?.id !== id) return;
+          // …y el editor pasa a mostrar la versión del servidor
+          this.api.noteFresh(id).subscribe({
+            next: server => { if (this.note()?.id === id && !this.dirty) { this.apply(server); this.content.set(server.content); this.status.set(''); } },
+            error: () => { this.note.set(null); this.missing.set(true); },
+          });
+        });
       },
     });
   }
