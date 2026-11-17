@@ -64,7 +64,7 @@ export function asTask(p: PendingTask): Task {
   const d = p.data;
   return {
     id: p.id, title: d.title ?? '', description: d.description ?? null, status: d.status ?? 'todo', priority: d.priority ?? 'medium',
-    due_date: d.due_date ?? null, all_day: d.all_day ?? true, completed_at: null, estimated_hours: d.estimated_hours ?? null,
+    due_date: d.due_date ?? null, all_day: d.all_day ?? true, completed_at: null, estimated_minutes: d.estimated_minutes ?? null,
     tags: d.tags ?? [], position: -1, project_id: d.project_id ?? null, parent_task_id: null, note_id: null, google_event_id: null,
     recurrence: d.recurrence ?? 'none', reminder_minutes: d.reminder_minutes ?? null, difficulty: d.difficulty ?? 2, time_spent_seconds: 0, user_id: 0, owner_name: '',
     assignee_id: d.assignee_id ?? null, assignee_name: null, can_edit: true, created_at: p.created_at, updated_at: p.created_at,

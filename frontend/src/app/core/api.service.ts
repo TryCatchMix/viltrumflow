@@ -5,7 +5,7 @@ import { map, tap } from 'rxjs/operators';
 import { Outbox, asNote, asTask } from './outbox';
 import { environment } from '../../environments/environment';
 import {
-  GameHistory, GameProfile, Habit, HabitDayItem, HabitInput, HabitStats, PomodoroSettings, PomodoroStats,
+  GameHistory, GameProfile, Goal, ReviewToday, WeeklyReview, Habit, HabitDayItem, HabitInput, HabitStats, PomodoroSettings, PomodoroStats,
   CalendarEvent, CalendarInfo, CalendarStatus, ChecklistItem, Mention, NoteVersion, Comment, Graph, ImportResult, Member, Note, NoteSummary, Overview, Project,
   Reminder, Role, SearchResult, TrashItem, Status, TagCount, Task, TaskInput,
 } from './models';
@@ -155,6 +155,9 @@ export class ApiService {
   checkHabit(id: number, day: string, checked: boolean) {
     return this.http.put<{ item: HabitDayItem; xp_gained: number }>(`${this.base}/habits/${id}/check`, { day, checked }).pipe(tap(() => this.xpChanged.next()));
   }
+  habitCount(id: number, day: string, count: number) {
+    return this.http.put<{ item: HabitDayItem; xp_gained: number }>(`${this.base}/habits/${id}/count`, { day, count }).pipe(tap(() => this.xpChanged.next()));
+  }
   habitStats(days: number) { return this.http.get<HabitStats>(`${this.base}/habits/stats`, { params: params({ days }) }); }
 
   // Pomodoro
@@ -163,7 +166,18 @@ export class ApiService {
   logPomodoro(seconds: number, task_id: number | null) {
     return this.t(this.http.post<{ xp_gained: number; task_title?: string | null }>(`${this.base}/pomodoro/sessions`, { seconds, task_id }));
   }
+  setPomodoroTimer(ends_at: string, phase: string) { return this.http.put<void>(`${this.base}/pomodoro/timer`, { ends_at, phase }); }
+  clearPomodoroTimer() { return this.http.delete<void>(`${this.base}/pomodoro/timer`); }
   pomodoroStats(days: number) { return this.http.get<PomodoroStats>(`${this.base}/pomodoro/stats`, { params: params({ days }) }); }
+
+  // Revisión semanal
+  review(weekStart?: string) { return this.http.get<WeeklyReview>(`${this.base}/review`, { params: params({ week_start: weekStart }) }); }
+  saveReview(week_start: string, goals: Goal[], reflection: string) { return this.http.put(`${this.base}/review`, { week_start, goals, reflection }); }
+  completeReview(week_start: string, goals: Goal[], reflection: string) {
+    return this.http.post<{ xp_gained: number }>(`${this.base}/review/complete`, { week_start, goals, reflection }).pipe(tap(() => this.xpChanged.next()));
+  }
+  reviewToday() { return this.http.get<ReviewToday>(`${this.base}/review/today`); }
+  toggleGoal(week_start: string, index: number, done: boolean) { return this.http.put<void>(`${this.base}/review/goal`, { week_start, index, done }); }
 
   // Progreso
   gameProfile() { return this.http.get<GameProfile>(`${this.base}/game/profile`); }

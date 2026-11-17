@@ -9,7 +9,7 @@ import { IconComponent } from '../shared/icon.component';
 import { RankInsigniaComponent } from '../shared/rank-insignia.component';
 
 const SHORT = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' });
-const KIND_ICON: Record<XpKind, string> = { task: 'check', habit: 'flame', focus: 'target' };
+const KIND_ICON: Record<XpKind, string> = { task: 'check', habit: 'flame', focus: 'target', review: 'calendar' };
 
 @Component({
   selector: 'app-progress',
@@ -63,10 +63,11 @@ const KIND_ICON: Record<XpKind, string> = { task: 'check', habit: 'flame', focus
           <section class="card panel"><h2>Cómo se gana</h2>
             <ul class="rules">
               <li><app-icon name="check" /> <span><strong>Tareas</strong>: 10, 20, 40 u 80 XP según la dificultad (fácil, normal, difícil, épica).</span></li>
-              <li><app-icon name="clock" /> <span><strong>Esfuerzo</strong>: +1 XP por cada 5 minutos registrados en la tarea (hasta 60). Sin tiempo registrado, +5 por hora estimada (hasta 40).</span></li>
+              <li><app-icon name="clock" /> <span><strong>Esfuerzo</strong>: +1 XP por cada 5 minutos registrados en la tarea (hasta 60). Sin tiempo registrado, +1 por cada 12 minutos estimados (hasta 40).</span></li>
               <li><app-icon name="calendar" /> <span><strong>A tiempo</strong>: +25 % si la terminas antes de su fecha. Prioridad alta +3, urgente +5. Cada subtarea, 5 XP.</span></li>
-              <li><app-icon name="flame" /> <span><strong>Rutinas</strong>: 5, 10, 15 o 25 XP según la dificultad, más 1 por cada día de racha (hasta 10).</span></li>
+              <li><app-icon name="flame" /> <span><strong>Rutinas</strong>: 5, 10, 15 o 25 XP según la dificultad al completarlas, más 1 por cada día (o semana) de racha (hasta 10).</span></li>
               <li><app-icon name="target" /> <span><strong>Concentración</strong>: 1 XP por cada 5 minutos de bloque Pomodoro terminado.</span></li>
+              <li><app-icon name="calendar" /> <span><strong>Revisión semanal</strong>: 30 XP al terminarla, una vez por semana.</span></li>
             </ul>
             <p class="muted small">Reabrir una tarea o desmarcar una rutina retira su experiencia. Cada nivel pide 100 XP más que el anterior.</p>
           </section>

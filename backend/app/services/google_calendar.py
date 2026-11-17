@@ -23,6 +23,7 @@ API = "https://www.googleapis.com/calendar/v3"
 SCOPES = ("openid email https://www.googleapis.com/auth/calendar.events "
           "https://www.googleapis.com/auth/calendar.calendarlist.readonly")
 TIMEOUT = 10.0
+DEFAULT_MINUTES = 30  # duración de una tarea con hora y sin estimación (igual que en el planificador del día)
 
 
 class GoogleError(Exception):
@@ -172,7 +173,7 @@ def _event_body(task: Task) -> dict:
         body["end"] = {"date": (day + timedelta(days=1)).isoformat()}  # fin exclusivo
     else:
         body["start"] = {"dateTime": due.isoformat()}
-        body["end"] = {"dateTime": (due + timedelta(minutes=task.estimated_minutes or 60)).isoformat()}
+        body["end"] = {"dateTime": (due + timedelta(minutes=task.estimated_minutes or DEFAULT_MINUTES)).isoformat()}
     return body
 
 
@@ -269,7 +270,7 @@ def pull_changes(db: Session, acct: GoogleAccount, force: bool = False) -> int:
                     end = _parse_start(ev.get("end", {}))
                     if end and not end[1]:
                         minutes = int((end[0] - due).total_seconds() // 60)
-                        if 0 < minutes <= 24 * 60 and minutes != (task.estimated_minutes or 60):
+                        if 0 < minutes <= 24 * 60 and minutes != (task.estimated_minutes or DEFAULT_MINUTES):
                             task.estimated_minutes = minutes
             title = (ev.get("summary") or "").removeprefix("✓ ").strip()
             if title and title != task.title:

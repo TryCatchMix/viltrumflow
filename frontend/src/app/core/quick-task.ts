@@ -23,6 +23,7 @@ export function quickToTask(text: string, projects: Project[]): { input: TaskInp
   if (parsed.priority) input.priority = parsed.priority;
   if (parsed.tags.length) input.tags = parsed.tags;
   if (parsed.recurrence) input.recurrence = parsed.recurrence;
+  if (parsed.estimate) input.estimated_minutes = parsed.estimate;
   if (project) input.project_id = project.id;
   return { input, parsed, project };
 }

@@ -76,6 +76,7 @@ export class PomodoroService {
     this.endsAt = Date.now() + this.remaining() * 1000;
     this.running.set(true);
     this.persist();
+    this.syncServer();
     if (this.settings().notify && typeof Notification !== 'undefined' && Notification.permission === 'default') Notification.requestPermission();
   }
   pause() {
@@ -84,13 +85,16 @@ export class PomodoroService {
     this.endsAt = null;
     this.running.set(false);
     this.persist();
+    this.syncServer();
   }
   /** Vuelve al principio de la fase actual sin registrar nada. */
   reset() {
+    const wasRunning = this.running();
     this.endsAt = null;
     this.running.set(false);
     this.remaining.set(this.total());
     this.persist();
+    if (wasRunning) this.syncServer();
   }
   /** Da por terminada la fase ahora. Un bloque de concentración cuenta por el tiempo real trabajado. */
   skip() {
@@ -123,7 +127,15 @@ export class PomodoroService {
     this.remaining.set(this.total());
     if (natural) this.announce(phase);
     if (natural && s.auto_start) this.start();
-    else this.persist();
+    else { this.persist(); this.syncServer(); }
+  }
+
+  /** El servidor avisa por push del final de la fase en curso aunque la app se cierre. */
+  private syncServer() {
+    const req = this.running() && this.endsAt
+      ? this.api.setPomodoroTimer(new Date(this.endsAt).toISOString(), this.phase())
+      : this.api.clearPomodoroTimer();
+    req.subscribe({ error: () => {} });
   }
 
   private log(seconds: number) {

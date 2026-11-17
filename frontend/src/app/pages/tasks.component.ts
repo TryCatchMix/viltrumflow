@@ -8,7 +8,7 @@ import { BOARD_STATUSES, ChecklistItem, PRIORITIES, PRIORITY_LABEL, RECURRENCE_L
 import { ToastService } from '../core/toast.service';
 import { hasMetadata } from '../core/quick-parse';
 import { quickToTask } from '../core/quick-task';
-import { addDays, formatDay, isOverdue, taskDay, taskTime, today } from '../core/util';
+import { addDays, formatDuration, formatDay, isOverdue, taskDay, taskTime, today } from '../core/util';
 import { IconComponent } from '../shared/icon.component';
 import { TaskDialogService } from '../shared/task-dialog.service';
 
@@ -36,13 +36,14 @@ type Due = '' | 'overdue' | 'today' | 'week' | 'none';
       <form class="quick row" (ngSubmit)="quickAdd()">
         <app-icon name="plus" />
         <input name="quick" [(ngModel)]="quick" (ngModelChange)="onQuick($event)" maxlength="200" aria-label="Añadir tarea rápida"
-          placeholder="Añadir tarea: «Llamar a Juan mañana a las 10 #trabajo !alta»" />
+          placeholder="Añadir tarea: «Llamar a Juan mañana a las 10 ~15m #trabajo !alta»" />
       </form>
       @if (preview(); as q) {
         <div class="preview row" aria-live="polite">
           <span class="muted">Se creará:</span><strong class="truncate">{{ q.input.title }}</strong>
           @if (q.parsed.day) { <span class="chip"><app-icon name="calendar" [size]="11" />{{ fmt(q.parsed.day) }} {{ q.parsed.time ?? '' }}</span> }
           @if (q.parsed.recurrence; as r) { <span class="chip"><app-icon name="repeat" [size]="11" />{{ rec[r] }}</span> }
+          @if (q.parsed.estimate; as est) { <span class="chip"><app-icon name="clock" [size]="11" />{{ duration(est * 60) }}</span> }
           @if (q.parsed.priority; as pr) { <span class="prio" [class]="pr">{{ priorityLabel[pr] }}</span> }
           @if (q.project; as pj) { <span class="chip"><i class="dot" [style.background]="pj.color"></i>{{ pj.name }}</span> }
           @for (tag of q.parsed.tags; track tag) { <span class="chip tag">#{{ tag }}</span> }
@@ -93,6 +94,7 @@ type Due = '' | 'overdue' | 'today' | 'week' | 'none';
                 <span class="spacer"></span>
                 @if (projectOf(t); as p) { <span class="chip"><i class="dot" [style.background]="p.color"></i>{{ p.name }}</span> }
                 @if (t.status === 'in_progress' || t.status === 'review' || t.status === 'archived') { <span class="chip">{{ statusLabel[t.status] }}</span> }
+                @if (t.estimated_minutes) { <span class="chip" title="Duración estimada"><app-icon name="clock" [size]="11" />{{ duration(t.estimated_minutes * 60) }}</span> }
                 @if (t.assignee_name) { <span class="chip" [title]="'Responsable: ' + t.assignee_name"><app-icon name="users" [size]="11" />{{ t.assignee_name }}</span> }
                 <span class="prio" [class]="t.priority">{{ priorityLabel[t.priority] }}</span>
                 @if (day(t); as d) {
@@ -161,6 +163,7 @@ export class TasksComponent implements OnInit {
   priorities = PRIORITIES;
   statusLabel = STATUS_LABEL; priorityLabel = PRIORITY_LABEL;
   rec = RECURRENCE_LABEL;
+  duration = formatDuration;
   fmt = formatDay; day = taskDay; time = taskTime; overdue = isOverdue;
 
   tab = signal<'tasks' | 'notes'>('tasks');

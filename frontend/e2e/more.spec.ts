@@ -108,7 +108,7 @@ test('calendario: vista semanal y arrastrar una tarea a otro día', async ({ bro
 
 test('registro de tiempo: cronómetro, corrección manual y gráfico', async ({ browser }) => {
   const { page, api } = await register(browser);
-  await api('POST', '/tasks', { title: 'Redactar informe', estimated_hours: 2 });
+  await api('POST', '/tasks', { title: 'Redactar informe', estimated_minutes: 120 });
   await page.goto('/tasks');
   await taskRow(page, 'Redactar informe').click();
 

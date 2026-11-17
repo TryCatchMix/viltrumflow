@@ -412,7 +412,11 @@ export class NotesComponent implements OnDestroy {
         } else if (draft) this.offline.remove(n.id);
         if (this.route.snapshot.queryParamMap.get('edit')) {
           if (this.mode() === 'preview') this.mode.set('edit');
-          setTimeout(() => this.editor?.focus(), 50);
+          setTimeout(() => {
+            // Solo si el usuario no ha empezado ya a escribir en otro campo (p. ej. el título)
+            const active = document.activeElement;
+            if (!active || active === document.body || !active.matches('input, textarea, select, [contenteditable]')) this.editor?.focus();
+          }, 50);
         }
       },
       error: () => {

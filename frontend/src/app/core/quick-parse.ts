@@ -12,6 +12,7 @@ export interface QuickTask {
   tags: string[];
   project: string | null;  // texto tras @, sin resolver
   recurrence: Recurrence | null;
+  estimate: number | null;  // minutos («~45m», «~1h30»)
 }
 
 const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
@@ -28,7 +29,7 @@ const word = (pattern: string) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${pattern})(
 
 export function parseQuick(input: string, now: Date = new Date()): QuickTask {
   let s = ` ${input} `;
-  const out: QuickTask = { title: '', day: null, time: null, priority: null, tags: [], project: null, recurrence: null };
+  const out: QuickTask = { title: '', day: null, time: null, priority: null, tags: [], project: null, recurrence: null, estimate: null };
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const plus = (days: number) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + days);
   const nextWeekday = (name: string) => {
@@ -53,6 +54,13 @@ export function parseQuick(input: string, now: Date = new Date()): QuickTask {
   if (prio) out.priority = PRIORITIES[prio[1].toLowerCase()];
   else if (take(/(?<=\s)!!(?=\s)/)) out.priority = 'urgent';
   else if (take(/(?<=\s)!(?=\s)/)) out.priority = 'high';
+
+  // Duración estimada: «~45m», «~45 min», «~2h», «~1h30», «~1,5h»
+  const est = take(/(?<=\s)~\s?(?:(\d+(?:[.,]\d+)?)\s?h(?:oras?)?(?:\s?(\d{1,2})(?:\s?m(?:in)?)?)?|(\d+)\s?m(?:in(?:utos?)?)?)(?=\s)/i);
+  if (est) {
+    const minutes = est[3] ? Number(est[3]) : Math.round(Number(est[1].replace(',', '.')) * 60) + Number(est[2] || 0);
+    if (minutes > 0) out.estimate = minutes;
+  }
 
   // Repetición
   let recurDay: Date | null = null;
@@ -117,5 +125,5 @@ function explicit(day: number, month: number, year: number | null, today: Date):
 
 /** ¿Se ha reconocido algo además del título? */
 export function hasMetadata(q: QuickTask): boolean {
-  return !!(q.day || q.time || q.priority || q.tags.length || q.project || q.recurrence);
+  return !!(q.day || q.time || q.priority || q.tags.length || q.project || q.recurrence || q.estimate);
 }

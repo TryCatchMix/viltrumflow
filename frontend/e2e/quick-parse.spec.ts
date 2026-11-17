@@ -36,7 +36,7 @@ test('captura rápida: horas', () => {
 
 test('captura rápida: prioridad, etiquetas, proyecto y repetición', () => {
   expect(p('Enviar factura #Trabajo #q4 !alta @web')).toEqual({
-    title: 'Enviar factura', day: null, time: null, priority: 'high', tags: ['trabajo', 'q4'], project: 'web', recurrence: null,
+    title: 'Enviar factura', day: null, time: null, priority: 'high', tags: ['trabajo', 'q4'], project: 'web', recurrence: null, estimate: null,
   });
   expect(p('Arreglar servidor !!').priority).toBe('urgent');
   expect(p('Algo p4').priority).toBe('low');
@@ -53,4 +53,13 @@ test('captura rápida: texto normal no se altera', () => {
     expect(p(title)).toMatchObject({ title, day: null, time: null, priority: null, project: null, recurrence: null });
   }
   expect(p('  #solo   ')).toMatchObject({ title: '#solo', tags: ['solo'] });
+});
+
+test('captura rápida: duración estimada', () => {
+  expect(p('Responder correo ~15m')).toMatchObject({ title: 'Responder correo', estimate: 15 });
+  expect(p('Llamada ~45 min mañana')).toMatchObject({ title: 'Llamada', estimate: 45, day: '2025-11-13' });
+  expect(p('Informe ~2h')).toMatchObject({ title: 'Informe', estimate: 120 });
+  expect(p('Revisión ~1h30')).toMatchObject({ title: 'Revisión', estimate: 90 });
+  expect(p('Diseño ~1,5h')).toMatchObject({ title: 'Diseño', estimate: 90 });
+  expect(p('Tarea de 30 minutos').estimate).toBeNull();  // sin «~» es texto normal
 });
