@@ -1,4 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { ApiService } from './api.service';
 import { AuthService } from './auth.service';
 import { ToastService } from './toast.service';
@@ -14,6 +15,7 @@ export class NotificationService {
   private auth = inject(AuthService);
   private toast = inject(ToastService);
   private dialog = inject(TaskDialogService);
+  private router = inject(Router);
   private timer?: ReturnType<typeof setInterval>;
 
   readonly supported = typeof Notification !== 'undefined';
@@ -37,6 +39,14 @@ export class NotificationService {
     this.api.pollReminders().subscribe({ next: list => list.forEach(r => this.notify(r)), error: () => {} });
   }
 
+  private habit(r: Reminder) {
+    this.toast.show(`Rutina pendiente: ${r.title}`, 'info', 12_000);
+    if (this.supported && Notification.permission === 'granted') {
+      const n = new Notification('Rutina pendiente', { body: r.title, tag: `vf-habit-${r.task_id}` });
+      n.onclick = () => { window.focus(); this.router.navigate(['/today']); n.close(); };
+    }
+  }
+
   private assigned(r: Reminder) {
     const where = r.by ? ` en «${r.by}»` : '';
     this.toast.show(`Te han asignado una tarea${where}: ${r.title}`, 'info', 12_000);
@@ -49,6 +59,7 @@ export class NotificationService {
 
   private notify(r: Reminder) {
     if (r.kind === 'assigned') return this.assigned(r);
+    if (r.kind === 'habit') return this.habit(r);
     const when = r.all_day || !r.due_date ? 'vence hoy o mañana' : `a las ${TIME.format(new Date(r.due_date))}`;
     const open = () => this.api.task(r.task_id).subscribe({ next: t => this.dialog.edit(t), error: () => {} });
     // Siempre queda el aviso dentro de la app; la notificación del sistema es un extra si hay permiso

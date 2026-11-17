@@ -1,9 +1,9 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService } from '../core/api.service';
-import { DIFFICULTY_LABEL, Habit, HabitDayItem, HabitInput, HabitState, HabitStats, PRIORITY_LABEL, Task, WEEKDAY_NAME, WEEKDAY_SHORT } from '../core/models';
+import { ReviewToday, DIFFICULTY_LABEL, Habit, HabitDayItem, HabitInput, HabitState, HabitStats, PRIORITY_LABEL, Task, WEEKDAY_NAME, WEEKDAY_SHORT } from '../core/models';
 import { ToastService } from '../core/toast.service';
 import { addDays, isOverdue, parseDay, taskDay, taskTime, toDue, today } from '../core/util';
 import { Bar, BarListComponent } from '../shared/bar-list.component';
@@ -15,13 +15,13 @@ import { TaskDialogService } from '../shared/task-dialog.service';
 const LONG = new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long' });
 const SHORT = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' });
 const COLORS = ['#7c5cff', '#2a78d6', '#1baf7a', '#eda100', '#eb6834', '#e34948', '#e87ba4', '#6b7280'];
-const STATE_LABEL: Record<HabitState, string> = { done: 'cumplida', missed: 'no cumplida', off: 'no tocaba', pending: 'pendiente (hoy)' };
+const STATE_LABEL: Record<HabitState, string> = { done: 'cumplida', missed: 'no cumplida', off: 'no tocaba', pending: 'pendiente (hoy)', partial: 'a medias', free: 'día libre (rutina semanal)' };
 const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
 
 @Component({
   selector: 'app-today',
   standalone: true,
-  imports: [FormsModule, IconComponent, LineChartComponent, BarListComponent, ColumnChartComponent],
+  imports: [FormsModule, RouterLink, IconComponent, LineChartComponent, BarListComponent, ColumnChartComponent],
   template: `
   <div class="page">
     <div class="page-head">
@@ -44,6 +44,10 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
 
     <!-- ===== Mi día ===== -->
     @if (tab() === 'day') {
+      @if (info()?.pending_review && isToday()) {
+        <a class="card banner row" routerLink="/review"><app-icon name="history" /><span><strong>Tu revisión semanal está pendiente.</strong>
+          Cinco minutos para cerrar la semana y fijar objetivos.</span><span class="spacer"></span><span class="btn sm primary">Hacer revisión</span></a>
+      }
       <div class="summary card row">
         <svg viewBox="0 0 44 44" width="56" height="56" role="img" [attr.aria-label]="done() + ' de ' + total() + ' completado'">
           <circle cx="22" cy="22" r="18" fill="none" stroke="var(--surface-3)" stroke-width="5" />
@@ -54,19 +58,41 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
           <p class="muted">{{ total() === 0 ? 'Nada programado para este día' : done() === total() ? 'Día completo. Buen trabajo.' : (total() - done()) + ' por hacer' }}</p></div>
       </div>
 
+      @if (info()?.goals?.length) {
+        <h3 class="group">Objetivos de la semana <span class="muted">{{ goalsDone() }}/{{ info()!.goals.length }}</span></h3>
+        <div class="card list">
+          @for (g of info()!.goals; track $index) {
+            <div class="item row" [class.done]="g.done">
+              <input type="checkbox" class="check big square" [checked]="g.done" (change)="toggleGoal($index, !g.done)" [id]="'goal' + $index" />
+              <label class="title" [for]="'goal' + $index">{{ g.text }}</label>
+            </div>
+          }
+        </div>
+      }
+
       <h3 class="group">Rutinas <span class="muted">{{ habitsDone() }}/{{ habits().length }}</span></h3>
       <div class="card list">
         @for (h of habits(); track h.id) {
-          <label class="item row" [class.done]="h.checked">
-            <input type="checkbox" class="check big" [checked]="h.checked" (change)="toggleHabit(h)" [attr.aria-label]="h.title" />
+          <div class="item row" [class.done]="h.checked">
+            <input type="checkbox" class="check big" [checked]="h.checked" (change)="toggleHabit(h)" [attr.aria-label]="h.title" [id]="'h' + h.id" />
             <i class="dot" [style.background]="h.color"></i>
-            <span class="title truncate">{{ h.title }}</span>
-            @if (h.target_time) { <span class="chip" title="Hora prevista"><app-icon name="clock" [size]="11" />{{ h.target_time }}</span> }
+            <label class="title truncate" [for]="'h' + h.id">{{ h.title }}</label>
+            @if (h.target_time) { <span class="chip" title="Hora prevista"><app-icon [name]="h.remind ? 'bell' : 'clock'" [size]="11" />{{ h.target_time }}</span> }
             <span class="spacer"></span>
-            @if (h.streak > 1) { <span class="chip streak" [title]="'Racha de ' + h.streak + ' días programados seguidos'"><app-icon name="flame" [size]="12" />{{ h.streak }}</span> }
+            @if (h.target_count > 1) {
+              <span class="qty row" role="group" [attr.aria-label]="'Progreso de ' + h.title">
+                <button class="btn ghost icon sm" (click)="step(h, -1)" [disabled]="h.count <= 0" aria-label="Uno menos">−</button>
+                <span class="n" aria-live="polite"><strong>{{ h.count }}</strong>/{{ h.target_count }} {{ h.unit }}</span>
+                <button class="btn ghost icon sm" (click)="step(h, 1)" aria-label="Uno más">+</button>
+              </span>
+            }
+            @if (h.weekly_target) {
+              <span class="chip" [class.met]="h.week_done >= h.weekly_target" title="Días cumplidos esta semana">{{ h.week_done }}/{{ h.weekly_target }} esta semana</span>
+            }
+            @if (h.streak > 1) { <span class="chip streak" [title]="h.weekly_target ? 'Racha de ' + h.streak + ' semanas cumpliendo el objetivo' : 'Racha de ' + h.streak + ' días programados seguidos'"><app-icon name="flame" [size]="12" />{{ h.streak }}{{ h.weekly_target ? ' sem' : '' }}</span> }
             @if (h.checked && h.checked_at) { <span class="muted when">a las {{ time(h.checked_at) }}</span> }
             <span class="chip xp" [class.got]="h.checked">+{{ h.xp }} XP</span>
-          </label>
+          </div>
         } @empty {
           <p class="muted pad">{{ loaded() ? 'No hay rutinas para este día. Añade una abajo: aparecerá aquí cada día que le toque.' : 'Cargando…' }}</p>
         }
@@ -78,7 +104,8 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
         }
       </div>
 
-      <h3 class="group">Tareas de {{ isToday() ? 'hoy' : 'este día' }} <span class="muted">{{ tasksDone() }}/{{ dayTasks().length }}</span></h3>
+      <h3 class="group">Tareas de {{ isToday() ? 'hoy' : 'este día' }} <span class="muted">{{ tasksDone() }}/{{ dayTasks().length }}</span>
+        <span class="spacer"></span><a class="plan" routerLink="/calendar" [queryParams]="{ view: 'day', day: day() }"><app-icon name="clock" [size]="13" /> Planificar por horas</a></h3>
       <div class="card list">
         @for (t of dayTasks(); track t.id) {
           <div class="item row" [class.done]="t.status === 'completed'" (click)="dialog.edit(t)" tabindex="0" (keydown.enter)="dialog.edit(t)">
@@ -128,7 +155,7 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
 
             <section class="card panel wide">
               <header class="row"><h2>Día a día: qué se cumplió y qué no</h2><span class="spacer"></span>
-                <span class="legend"><i class="cell done"></i> cumplida <i class="cell missed"></i> no cumplida <i class="cell pending"></i> pendiente <i class="cell off"></i> no tocaba</span></header>
+                <span class="legend"><i class="cell done"></i> cumplida <i class="cell partial"></i> a medias <i class="cell missed"></i> no cumplida <i class="cell pending"></i> pendiente <i class="cell off"></i> no tocaba o libre</span></header>
               <div class="heat">
                 <table>
                   <thead><tr><th></th>@for (d of s.days; track d; let i = $index) { <th>{{ (s.days.length - 1 - i) % 5 === 0 ? dayNum(d) : '' }}</th> }</tr></thead>
@@ -150,8 +177,8 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
                 <tbody>
                   @for (h of s.habits; track h.id) {
                     <tr><td><i class="dot" [style.background]="h.color"></i> {{ h.title }}</td>
-                      <td>{{ h.rate === null ? '—' : h.rate + '% (' + h.done + '/' + h.scheduled + ')' }}</td>
-                      <td>{{ h.streak }}</td><td>{{ h.best_streak }}</td>
+                      <td>{{ h.rate === null ? '—' : h.rate + '% (' + h.done + '/' + h.scheduled + (h.period === 'week' ? ' semanas' : '') + ')' }}</td>
+                      <td>{{ h.streak }}{{ h.period === 'week' ? ' sem' : '' }}</td><td>{{ h.best_streak }}{{ h.period === 'week' ? ' sem' : '' }}</td>
                       <td>{{ h.avg_minute === null ? '—' : clock(h.avg_minute) }}</td>
                       <td [title]="h.target_time ? 'Marcada antes de las ' + h.target_time : 'Sin hora prevista'">{{ h.on_time_rate === null ? '—' : h.on_time_rate + '%' }}</td></tr>
                   }
@@ -177,7 +204,9 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
             <i class="dot" [style.background]="h.color"></i><span class="title truncate">{{ h.title }}</span>
             @if (h.is_archived) { <span class="chip">Archivada</span> }
             <span class="spacer"></span>
-            <span class="week" [attr.aria-label]="daysText(h)">@for (d of week; track $index) { <b [class.on]="h.days.includes('' + $index)">{{ d }}</b> }</span>
+            @if (h.weekly_target) { <span class="chip">{{ h.weekly_target }}× por semana</span> }
+            @else { <span class="week" [attr.aria-label]="daysText(h)">@for (d of week; track $index) { <b [class.on]="h.days.includes('' + $index)">{{ d }}</b> }</span> }
+            @if (h.target_count > 1) { <span class="chip">{{ h.target_count }} {{ h.unit }}</span> }
             @if (h.target_time) { <span class="chip"><app-icon name="clock" [size]="11" />{{ h.target_time }}</span> }
             <span class="chip">{{ difficulty[h.difficulty] }}</span>
             <button class="btn ghost icon sm" title="Editar rutina" (click)="edit(h)"><app-icon name="edit" /></button>
@@ -192,11 +221,26 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
       <form class="modal" (click)="$event.stopPropagation()" (ngSubmit)="save()">
         <h2>{{ e.id ? 'Editar rutina' : 'Nueva rutina' }}</h2>
         <label class="field">Nombre <input class="input" name="title" [(ngModel)]="e.title" required maxlength="200" /></label>
-        <div class="field">Días
-          <div class="row daypick" role="group" aria-label="Días de la semana">
-            @for (d of week; track $index) {
-              <button type="button" [class.on]="e.days.includes('' + $index)" [attr.aria-pressed]="e.days.includes('' + $index)" [attr.aria-label]="weekName[$index]" (click)="toggleDay(e, $index)">{{ d }}</button>
-            }
+        <div class="field">Frecuencia
+          <div class="row" role="radiogroup" aria-label="Frecuencia">
+            <button type="button" class="btn sm" role="radio" [attr.aria-checked]="!e.weekly" [class.active]="!e.weekly" (click)="e.weekly = false">Días concretos</button>
+            <button type="button" class="btn sm" role="radio" [attr.aria-checked]="e.weekly" [class.active]="e.weekly" (click)="e.weekly = true">Veces por semana</button>
+          </div>
+          @if (e.weekly) {
+            <div class="row"><input class="input qtyin" type="number" name="weekly" min="1" max="7" [(ngModel)]="e.weekly_target" aria-label="Veces por semana" />
+              <span class="muted">días a la semana, los que tú elijas</span></div>
+          } @else {
+            <div class="row daypick" role="group" aria-label="Días de la semana">
+              @for (d of week; track $index) {
+                <button type="button" [class.on]="e.days.includes('' + $index)" [attr.aria-pressed]="e.days.includes('' + $index)" [attr.aria-label]="weekName[$index]" (click)="toggleDay(e, $index)">{{ d }}</button>
+              }
+            </div>
+          }
+        </div>
+        <div class="field">Cantidad diaria <span class="muted hint">(1 = un simple check)</span>
+          <div class="row">
+            <input class="input qtyin" type="number" name="count" min="1" max="1000" [(ngModel)]="e.target_count" aria-label="Cantidad objetivo" />
+            <input class="input" name="unit" [(ngModel)]="e.unit" maxlength="20" placeholder="unidad: vasos, páginas, km…" aria-label="Unidad" [disabled]="e.target_count <= 1" />
           </div>
         </div>
         <div class="row two">
@@ -204,6 +248,8 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
           <label class="field">Dificultad
             <select class="input" name="difficulty" [(ngModel)]="e.difficulty">@for (d of [1,2,3,4]; track d) { <option [ngValue]="d">{{ difficulty[d] }}</option> }</select></label>
         </div>
+        <label class="row remind"><input type="checkbox" name="remind" [(ngModel)]="e.remind" [disabled]="!e.target_time" />
+          Avisarme a la hora prevista si aún no la he hecho</label>
         <div class="field">Color
           <div class="row colors" role="radiogroup" aria-label="Color">
             @for (c of colors; track c) { <button type="button" role="radio" [attr.aria-checked]="e.color === c" [attr.aria-label]="c" [style.background]="c" [class.sel]="e.color === c" (click)="e.color = c"></button> }
@@ -216,13 +262,15 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
           }
           <span class="spacer"></span>
           <button type="button" class="btn" (click)="editing.set(null)">Cancelar</button>
-          <button class="btn primary" [disabled]="!e.title.trim() || !e.days">Guardar</button>
+          <button class="btn primary" [disabled]="!e.title.trim() || (!e.weekly && !e.days) || (e.weekly && !(e.weekly_target >= 1 && e.weekly_target <= 7)) || !(e.target_count >= 1)">Guardar</button>
         </div>
       </form>
     </div>
   }`,
   styles: [`
     .cap::first-letter { text-transform: uppercase; }
+    .banner { padding: 12px 16px; gap: 12px; margin-bottom: 12px; color: var(--text); border-color: var(--accent); background: var(--accent-soft); &:hover { text-decoration: none; } span { font-size: 13.5px; } }
+    .plan { font-weight: 400; font-size: 12.5px; display: inline-flex; gap: 4px; align-items: center; }
     .summary { padding: 14px 18px; gap: 16px; margin-bottom: 4px; strong { font-size: 20px; font-weight: 600; } }
     .group { margin: 18px 0 8px; display: flex; gap: 8px; align-items: baseline; font-size: 13px; color: var(--text-2); .muted { font-weight: 400; } }
     .list { overflow: hidden; }
@@ -232,6 +280,10 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
     .title { flex: 0 1 auto; font-size: 15px; }
     .add { cursor: text; color: var(--text-3); input { flex: 1; border: none; background: none; outline: none; height: 46px; color: var(--text); } }
     .streak { color: var(--serious); } .late { color: var(--critical); } .when { font-size: 12px; white-space: nowrap; }
+    .qty { gap: 2px; .n { font-size: 13px; font-variant-numeric: tabular-nums; min-width: 64px; text-align: center; color: var(--text-2); strong { color: var(--text); } } .btn { font-size: 16px; } }
+    .met { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--text); }
+    .qtyin { width: 90px; flex: none; } .hint { font-weight: 400; } .remind { font-size: 13px; color: var(--text-2); }
+    label.title { cursor: pointer; }
     .xp { font-variant-numeric: tabular-nums; &.got { background: var(--accent-soft); color: var(--accent-text); } }
     .pad { padding: 14px; }
     .range { margin-bottom: 12px; }
@@ -244,7 +296,8 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
     /* Estado con forma además de color: relleno, borde, borde discontinuo y punto */
     .cell { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle; box-sizing: border-box;
       &.done { background: var(--good); } &.missed { border: 2px solid var(--critical); }
-      &.pending { border: 2px dashed var(--text-3); } &.off { width: 4px; height: 4px; border-radius: 50%; background: var(--surface-3); margin: 5px; } }
+      &.pending { border: 2px dashed var(--text-3); } &.partial { background: linear-gradient(to top, var(--good) 50%, transparent 50%); border: 2px solid var(--good); }
+      &.off, &.free { width: 4px; height: 4px; border-radius: 50%; background: var(--surface-3); margin: 5px; } }
     .heat { overflow-x: auto; table { border-collapse: separate; border-spacing: 2px; } th { font-size: 11px; font-weight: 400; color: var(--text-3); text-align: center; padding: 0; min-width: 14px; }
       tbody th { text-align: left; font-size: 13px; color: var(--text-2); max-width: 170px; padding-right: 10px; position: sticky; left: 0; background: var(--surface); .dot { display: inline-block; margin-right: 6px; } }
       td { padding: 0; line-height: 0; text-align: center; } }
@@ -281,8 +334,11 @@ export class TodayComponent implements OnInit {
   range = signal(30);
   table = signal(false);
   loaded = signal(false);
-  editing = signal<{ id?: number; title: string; days: string; target_time: string; difficulty: number; color: string; is_archived?: boolean } | null>(null);
+  editing = signal<{ id?: number; title: string; days: string; target_time: string; difficulty: number; color: string; is_archived?: boolean;
+    weekly: boolean; weekly_target: number; target_count: number; unit: string; remind: boolean } | null>(null);
   newHabit = '';
+  info = signal<ReviewToday | null>(null);
+  goalsDone = computed(() => this.info()?.goals.filter(g => g.done).length ?? 0);
   newTask = '';
 
   isToday = computed(() => this.day() === this.todayStr);
@@ -318,7 +374,7 @@ export class TodayComponent implements OnInit {
     const tab = this.route.snapshot.queryParamMap.get('tab');
     if (tab === 'stats' || tab === 'manage') this.tab.set(tab);
   }
-  ngOnInit() { this.loadDay(); this.loadTasks(); if (this.tab() !== 'day') this.setTab(this.tab()); }
+  ngOnInit() { this.loadDay(); this.loadTasks(); this.api.reviewToday().subscribe({ next: i => this.info.set(i), error: () => {} }); if (this.tab() !== 'day') this.setTab(this.tab()); }
 
   time = (iso: string) => new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
   dayNum = (d: string) => parseDay(d).getDate();
@@ -345,7 +401,7 @@ export class TodayComponent implements OnInit {
 
   toggleHabit(h: HabitDayItem) {
     const checked = !h.checked;
-    this.habits.update(l => l.map(x => (x.id === h.id ? { ...x, checked } : x)));  // optimista
+    this.habits.update(l => l.map(x => (x.id === h.id ? { ...x, checked, count: checked ? x.target_count : 0 } : x)));  // optimista
     this.api.checkHabit(h.id, this.day(), checked).subscribe({
       next: r => this.habits.update(l => l.map(x => (x.id === h.id ? r.item : x))),
       error: e => { this.toast.error(e); this.loadDay(); },
@@ -356,6 +412,22 @@ export class TodayComponent implements OnInit {
     this.tasks.update(l => l.map(x => (x.id === t.id ? { ...x, status } : x)));
     this.api.updateTask(t.id, { status }).subscribe({ error: e => { this.toast.error(e); this.loadTasks(); } });
   }
+  toggleGoal(index: number, done: boolean) {
+    const i = this.info()!;
+    this.info.set({ ...i, goals: i.goals.map((g, k) => (k === index ? { ...g, done } : g)) });
+    this.api.toggleGoal(i.goals_week, index, done).subscribe({ error: e => this.toast.error(e) });
+  }
+
+  /** Suma o resta uno en una rutina con cantidad. */
+  step(h: HabitDayItem, delta: number) {
+    const count = Math.max(0, h.count + delta);
+    this.habits.update(l => l.map(x => (x.id === h.id ? { ...x, count, checked: count >= x.target_count } : x)));
+    this.api.habitCount(h.id, this.day(), count).subscribe({
+      next: r => this.habits.update(l => l.map(x => (x.id === h.id ? r.item : x))),
+      error: e => { this.toast.error(e); this.loadDay(); },
+    });
+  }
+
   quickHabit() {
     const title = this.newHabit.trim();
     if (!title) return;
@@ -371,8 +443,9 @@ export class TodayComponent implements OnInit {
 
   // ---- Gestión ----
   edit(h?: Habit) {
-    this.editing.set(h ? { id: h.id, title: h.title, days: h.days, target_time: h.target_time ?? '', difficulty: h.difficulty, color: h.color, is_archived: h.is_archived }
-      : { title: '', days: '0123456', target_time: '', difficulty: 2, color: COLORS[0] });
+    this.editing.set(h ? { id: h.id, title: h.title, days: h.days, target_time: h.target_time ?? '', difficulty: h.difficulty, color: h.color, is_archived: h.is_archived,
+        weekly: !!h.weekly_target, weekly_target: h.weekly_target ?? 3, target_count: h.target_count, unit: h.unit, remind: h.remind }
+      : { title: '', days: '0123456', target_time: '', difficulty: 2, color: COLORS[0], weekly: false, weekly_target: 3, target_count: 1, unit: '', remind: false });
     setTimeout(() => document.querySelector<HTMLInputElement>('.modal input')?.focus());
   }
   toggleDay(e: { days: string }, i: number) {
@@ -381,7 +454,9 @@ export class TodayComponent implements OnInit {
   }
   save() {
     const e = this.editing()!;
-    const data: HabitInput = { title: e.title.trim(), days: e.days, target_time: e.target_time || null, difficulty: e.difficulty, color: e.color };
+    const count = Math.max(1, Math.round(Number(e.target_count) || 1));
+    const data: HabitInput = { title: e.title.trim(), days: e.days || '0123456', target_time: e.target_time || null, difficulty: e.difficulty, color: e.color,
+      weekly_target: e.weekly ? Number(e.weekly_target) : null, target_count: count, unit: count > 1 ? e.unit.trim() : '', remind: !!e.target_time && e.remind };
     (e.id ? this.api.updateHabit(e.id, data) : this.api.createHabit(data)).subscribe({
       next: () => { this.editing.set(null); this.loadAll(); this.loadDay(); }, error: err => this.toast.error(err, 'No se pudo guardar la rutina'),
     });

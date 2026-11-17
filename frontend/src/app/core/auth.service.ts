@@ -53,6 +53,20 @@ export class AuthService {
   }
 
   logout(redirect = true) {
+    // Antes de olvidar la sesión: este navegador deja de recibir los avisos de esta cuenta
+    const token = this.accessToken, endpoint = localStorage.getItem('vf-push-endpoint');
+    if (token) {
+      const send = (path: string, method: string, body?: unknown) => fetch(`${environment.apiUrl}/api/v1${path}`, {
+        method, keepalive: true, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }).catch(() => {});
+      if (endpoint) send('/push/unsubscribe', 'POST', { endpoint });
+      send('/pomodoro/timer', 'DELETE');
+    }
+    if (endpoint) {
+      navigator.serviceWorker?.getRegistration().then(r => r?.pushManager.getSubscription()).then(s => s?.unsubscribe()).catch(() => {});
+      localStorage.removeItem('vf-push-endpoint');
+    }
     localStorage.removeItem(ACCESS);
     localStorage.removeItem(REFRESH);
     this.user.set(null);

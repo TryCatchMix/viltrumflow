@@ -9,6 +9,12 @@ import { formatDuration, relativeTime, spentSeconds, taskDay, taskTime, toDue } 
 import { IconComponent } from './icon.component';
 import { TaskDialogService } from './task-dialog.service';
 
+/** Minutos → valor y unidad más naturales para el formulario (45 → 45 min; 120 → 2 h; 90 → 90 min). */
+function splitEstimate(minutes?: number | null): { est_value: number | null; est_unit: 'min' | 'h' } {
+  if (!minutes) return { est_value: null, est_unit: 'min' };
+  return minutes % 60 === 0 ? { est_value: minutes / 60, est_unit: 'h' } : { est_value: minutes, est_unit: 'min' };
+}
+
 @Component({
   selector: 'app-task-dialog',
   standalone: true,
@@ -48,8 +54,13 @@ import { TaskDialogService } from './task-dialog.service';
               @for (d of [1, 2, 3, 4]; track d) { <option [ngValue]="d">{{ difficultyLabel[d] }} · {{ xpBase[d] }} XP</option> }
             </select>
           </label>
-          <label class="field">Estimación (horas)
-            <input class="input" type="number" min="0" name="hours" [(ngModel)]="f.estimated_hours" />
+          <label class="field">Estimación
+            <span class="est">
+              <input class="input" type="text" inputmode="decimal" name="estimate" [(ngModel)]="f.est_value" aria-label="Duración estimada" placeholder="—" maxlength="6" />
+              <select class="input" name="estUnit" [(ngModel)]="f.est_unit" aria-label="Unidad de la estimación">
+                <option value="min">min</option><option value="h">horas</option>
+              </select>
+            </span>
           </label>
           <label class="field">Fecha
             <input class="input" type="date" name="day" [(ngModel)]="f.day" />
@@ -107,7 +118,7 @@ import { TaskDialogService } from './task-dialog.service';
           <h3>Tiempo dedicado</h3>
           <div class="row">
             <strong class="clock" [class.on]="running()">{{ duration(elapsed()) }}</strong>
-            @if (f.estimated_hours) { <span class="muted">de {{ f.estimated_hours }} h estimadas</span> }
+            @if (estimateMinutes(); as est) { <span class="muted">de {{ duration(est * 60) }} estimados</span> }
             <span class="spacer"></span>
             @if (!readOnly()) {
               @if (running()) { <button class="btn" (click)="timer(false)"><app-icon name="stop" /> Parar</button> }
@@ -173,6 +184,7 @@ import { TaskDialogService } from './task-dialog.service';
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     section { display: grid; gap: 8px; border-top: 1px solid var(--border); padding-top: 16px; }
     h3 { display: flex; gap: 8px; align-items: baseline; }
+    .est { display: flex; gap: 6px; .input:first-child { flex: 1; min-width: 0; } select { width: 86px; flex: none; } }
     .note { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text-3); margin-top: -4px; }
     .sub { min-height: 28px; } .done { color: var(--text-3); text-decoration: line-through; }
     .comment { background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 13px; p { white-space: pre-wrap; overflow-wrap: anywhere; } .muted { font-size: 12px; } }
@@ -233,7 +245,7 @@ export class TaskDialogComponent implements OnDestroy {
         this.f = {
           title: t.title, description: t.description ?? '', status: t.status, priority: t.priority,
           day: taskDay(t) ?? '', time: taskTime(t), project_id: t.project_id ?? null,
-          estimated_hours: t.estimated_hours ?? null, tags: t.tags.join(', '),
+          ...splitEstimate(t.estimated_minutes), tags: t.tags.join(', '),
           recurrence: t.recurrence ?? 'none', reminder_minutes: t.reminder_minutes ?? null, assignee_id: t.assignee_id ?? null,
           difficulty: t.difficulty ?? 2,
         };
@@ -260,7 +272,7 @@ export class TaskDialogComponent implements OnDestroy {
 
   private blank() {
     return { title: '', description: '', status: 'todo' as Status, priority: 'medium' as Priority, day: '', time: '',
-      project_id: null as number | null, estimated_hours: null as number | null, tags: '',
+      project_id: null as number | null, est_value: null as number | null, est_unit: 'min' as 'min' | 'h', tags: '',
       recurrence: 'none' as Recurrence, reminder_minutes: null as number | null, assignee_id: null as number | null, difficulty: 2 };
   }
 
@@ -277,6 +289,15 @@ export class TaskDialogComponent implements OnDestroy {
     this.api.updateTask(this.task.id, { time_spent_seconds: m * 60 }).subscribe({ next: saved => this.timed.set(saved), error: e => this.toast.error(e) });
   }
 
+  /** Estimación en minutos a partir del campo (admite decimales en horas: 1,5 h = 90 min). */
+  estimateMinutes(): number | null {
+    const raw = this.f.est_value as unknown;
+    if (raw === null || raw === '' || raw === undefined) return null;
+    const n = Number(String(raw).replace(',', '.'));
+    if (!isFinite(n) || n <= 0) return null;
+    return Math.round(this.f.est_unit === 'h' ? n * 60 : n);
+  }
+
   onProject(id: number | null) { this.f.assignee_id = null; this.loadMembers(id); }
   private loadMembers(projectId: number | null) {
     this.members.set([]);
@@ -289,7 +310,7 @@ export class TaskDialogComponent implements OnDestroy {
     const data = {
       title, description: this.f.description.trim() || null, status: this.f.status, priority: this.f.priority,
       ...toDue(this.f.day, this.f.time), project_id: this.f.project_id,
-      estimated_hours: this.f.estimated_hours === null || (this.f.estimated_hours as unknown) === '' ? null : Number(this.f.estimated_hours),
+      estimated_minutes: this.estimateMinutes(),
       tags: this.f.tags.split(',').map(t => t.trim()).filter(Boolean),
       recurrence: this.f.recurrence, reminder_minutes: this.f.day ? this.f.reminder_minutes : null,
       assignee_id: this.f.project_id ? this.f.assignee_id : null,

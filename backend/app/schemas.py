@@ -187,7 +187,7 @@ class TaskCreate(BaseModel):
     priority: Priority = Priority.MEDIUM
     due_date: Optional[datetime] = None
     all_day: bool = True
-    estimated_hours: Optional[int] = Field(None, ge=0, le=10000)
+    estimated_minutes: Optional[int] = Field(None, ge=0, le=600_000)
     tags: List[str] = []
     project_id: Optional[int] = None
     parent_task_id: Optional[int] = None
@@ -207,7 +207,7 @@ class TaskUpdate(BaseModel):
     priority: Optional[Priority] = None
     due_date: Optional[datetime] = None
     all_day: Optional[bool] = None
-    estimated_hours: Optional[int] = Field(None, ge=0, le=10000)
+    estimated_minutes: Optional[int] = Field(None, ge=0, le=600_000)
     tags: Optional[List[str]] = None
     project_id: Optional[int] = None
     note_id: Optional[int] = None
@@ -237,7 +237,7 @@ class TaskOut(ORM):
     due_date: Optional[datetime] = None
     all_day: bool
     completed_at: Optional[datetime] = None
-    estimated_hours: Optional[int] = None
+    estimated_minutes: Optional[int] = None
     tags: List[str] = []
     position: int
     project_id: Optional[int] = None
@@ -436,7 +436,7 @@ class ImportResult(BaseModel):
 
 # ---------- Recordatorios ----------
 class ReminderOut(Out):
-    kind: Literal["reminder", "assigned"] = "reminder"
+    kind: Literal["reminder", "assigned", "habit"] = "reminder"
     task_id: int
     title: str
     due_date: Optional[datetime] = None
@@ -506,6 +506,10 @@ class HabitIn(BaseModel):
     target_time: Optional[str] = Field(None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     difficulty: int = Field(2, ge=1, le=4)
     color: str = Field("#7c5cff", pattern=HEX)
+    target_count: int = Field(1, ge=1, le=1000)
+    unit: str = Field("", max_length=20)
+    weekly_target: Optional[int] = Field(None, ge=1, le=7)
+    remind: bool = False
 
     _d = field_validator("days")(_days)
 
@@ -517,6 +521,10 @@ class HabitUpdate(BaseModel):
     difficulty: Optional[int] = Field(None, ge=1, le=4)
     color: Optional[str] = Field(None, pattern=HEX)
     is_archived: Optional[bool] = None
+    target_count: Optional[int] = Field(None, ge=1, le=1000)
+    unit: Optional[str] = Field(None, max_length=20)
+    weekly_target: Optional[int] = Field(None, ge=1, le=7)  # null = días fijos
+    remind: Optional[bool] = None
 
     @field_validator("days")
     @classmethod
@@ -533,18 +541,29 @@ class HabitOut(ORM):
     color: str
     is_archived: bool
     start_day: date
+    target_count: int = 1
+    unit: str = ""
+    weekly_target: Optional[int] = None
+    remind: bool = False
 
 
 class HabitDayItem(HabitOut):
-    checked: bool = False
+    checked: bool = False  # cumplida ese día (cantidad alcanzada)
+    count: int = 0  # progreso del día en rutinas con cantidad
     checked_at: Optional[datetime] = None
-    streak: int = 0
-    xp: int = 0  # experiencia que da (o dio) marcarla ese día
+    streak: int = 0  # días seguidos (o semanas seguidas si es semanal)
+    week_done: int = 0  # días cumplidos esta semana (rutinas semanales)
+    xp: int = 0  # experiencia que da (o dio) completarla ese día
 
 
 class HabitCheckIn(BaseModel):
     day: date
     checked: bool
+
+
+class HabitCountIn(BaseModel):
+    day: date
+    count: int = Field(ge=0, le=100_000)
 
 
 class HabitCheckResult(BaseModel):

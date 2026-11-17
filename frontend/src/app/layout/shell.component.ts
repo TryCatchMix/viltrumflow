@@ -5,6 +5,7 @@ import { AuthService } from '../core/auth.service';
 import { SwUpdate } from '@angular/service-worker';
 import { NotificationService } from '../core/notification.service';
 import { OfflineService } from '../core/offline.service';
+import { PushService } from '../core/push.service';
 import { ThemeService } from '../core/theme.service';
 import { ToastService } from '../core/toast.service';
 import { GameService } from '../core/game.service';
@@ -139,6 +140,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   offline = inject(OfflineService);
   game = inject(GameService);
   pomodoro = inject(PomodoroService);
+  private push = inject(PushService);
   phaseLabel = PHASE_LABEL;
   updateReady = signal(false);
   reload() { location.reload(); }
@@ -159,6 +161,7 @@ export class ShellComponent implements OnInit, OnDestroy {
     { path: '/calendar', icon: 'calendar', label: 'Calendario' },
     { path: '/projects', icon: 'folder', label: 'Proyectos' },
     { path: '/focus', icon: 'target', label: 'Enfoque' },
+    { path: '/review', icon: 'history', label: 'Revisión semanal' },
     { path: '/progress', icon: 'shield', label: 'Progreso', gap: true },
     { path: '/notes', icon: 'note', label: 'Notas' },
     { path: '/graph', icon: 'graph', label: 'Grafo', gap: true },
@@ -182,6 +185,7 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.notifications.start();
     this.game.refresh();
     this.pomodoro.init();
+    this.push.init();
     this.offline.sync();
     if (this.sw.isEnabled) this.sw.versionUpdates.subscribe(e => { if (e.type === 'VERSION_READY') this.updateReady.set(true); });
     this.router.events.pipe(filter(e => e instanceof NavigationEnd)).subscribe(() => this.navOpen.set(false));

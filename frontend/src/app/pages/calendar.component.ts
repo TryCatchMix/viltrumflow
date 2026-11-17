@@ -5,6 +5,7 @@ import { ApiService } from '../core/api.service';
 import { CalendarEvent, CalendarInfo, CalendarStatus, Task } from '../core/models';
 import { ToastService } from '../core/toast.service';
 import { addDays, parseDay, taskDay, taskTime, toDue, today, ymd } from '../core/util';
+import { DayPlannerComponent } from '../shared/day-planner.component';
 import { IconComponent } from '../shared/icon.component';
 import { TaskDialogService } from '../shared/task-dialog.service';
 
@@ -18,25 +19,29 @@ const mondayOf = (day: string) => addDays(day, -((parseDay(day).getDay() + 6) % 
 @Component({
   selector: 'app-calendar',
   standalone: true,
-  imports: [IconComponent],
+  imports: [IconComponent, DayPlannerComponent],
   template: `
   <div class="page cal-page">
     <div class="page-head">
       <h1 class="month">{{ monthLabel() }}</h1>
       <div class="row">
-        <button class="btn icon" (click)="shift(-1)" [attr.aria-label]="view() === 'month' ? 'Mes anterior' : 'Semana anterior'"><app-icon name="left" /></button>
+        <button class="btn icon" (click)="shift(-1)" [attr.aria-label]="view() === 'month' ? 'Mes anterior' : view() === 'week' ? 'Semana anterior' : 'Día anterior'"><app-icon name="left" /></button>
         <button class="btn" (click)="goToday()">Hoy</button>
-        <button class="btn icon" (click)="shift(1)" [attr.aria-label]="view() === 'month' ? 'Mes siguiente' : 'Semana siguiente'"><app-icon name="right" /></button>
+        <button class="btn icon" (click)="shift(1)" [attr.aria-label]="view() === 'month' ? 'Mes siguiente' : view() === 'week' ? 'Semana siguiente' : 'Día siguiente'"><app-icon name="right" /></button>
       </div>
       <div class="row" role="group" aria-label="Vista">
         <button class="btn sm" [class.active]="view() === 'month'" (click)="setView('month')">Mes</button>
         <button class="btn sm" [class.active]="view() === 'week'" (click)="setView('week')">Semana</button>
+        <button class="btn sm" [class.active]="view() === 'day'" (click)="setView('day')">Día</button>
       </div>
       <span class="spacer"></span>
       <div class="legend row"><span><i class="task"></i> Tarea</span><span><i class="google"></i> Google Calendar</span></div>
     </div>
 
-    <div class="layout">
+    @if (view() === 'day') {
+      <app-day-planner [day]="selected()" [tasks]="tasks()" [events]="events()" />
+    }
+    <div class="layout" [hidden]="view() === 'day'">
       <div class="card grid" [class.week]="view() === 'week'" role="grid" [attr.aria-label]="monthLabel()">
         @for (d of weekdays; track d) { <div class="wd" role="columnheader">{{ d }}</div> }
         @for (c of cells(); track c.day) {
@@ -58,6 +63,7 @@ const mondayOf = (day: string) => addDays(day, -((parseDay(day).getDay() + 6) % 
       <aside class="side">
         <section class="card box">
           <header class="row"><h2 class="cap">{{ selectedLabel() }}</h2><span class="spacer"></span>
+            <button class="btn sm" (click)="setView('day')" title="Abrir el planificador por horas de este día"><app-icon name="clock" [size]="13" /> Planificar</button>
             <button class="btn sm" (click)="newTask(selected())"><app-icon name="plus" [size]="13" /> Tarea</button></header>
           @for (e of selectedEntries(); track e.key) {
             <button class="line row" (click)="openEntry(e, $event)">
@@ -136,7 +142,7 @@ export class CalendarComponent implements OnInit {
   weekdays = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   todayStr = today();
   month = signal(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-  view = signal<'month' | 'week'>(localStorage.getItem('vf-cal-view') === 'week' ? 'week' : 'month');
+  view = signal<'month' | 'week' | 'day'>((['week', 'day'].includes(localStorage.getItem('vf-cal-view') ?? '') ? localStorage.getItem('vf-cal-view') : 'month') as 'month' | 'week' | 'day');
   /** Lunes de la semana mostrada en la vista semanal. */
   weekStart = signal(mondayOf(today()));
   calendars = signal<CalendarInfo[]>([]);
@@ -155,6 +161,7 @@ export class CalendarComponent implements OnInit {
 
   monthLabel = computed(() => {
     if (this.view() === 'month') return MONTH.format(this.month());
+    if (this.view() === 'day') { const s = LONG.format(parseDay(this.selected())); return s.charAt(0).toUpperCase() + s.slice(1); }
     const a = parseDay(this.weekStart()), b = parseDay(addDays(this.weekStart(), 6));
     return `${a.getDate()}${a.getMonth() === b.getMonth() ? '' : ' ' + SHORT_MONTH.format(a)} – ${b.getDate()} ${SHORT_MONTH.format(b)} ${b.getFullYear()}`;
   });
@@ -163,6 +170,7 @@ export class CalendarComponent implements OnInit {
   /** Primer día visible: el lunes de la semana en que empieza el mes. */
   private gridStart = computed(() => {
     if (this.view() === 'week') return this.weekStart();
+    if (this.view() === 'day') return this.selected();
     const m = this.month();
     return addDays(ymd(m), -((m.getDay() + 6) % 7));
   });
@@ -204,6 +212,12 @@ export class CalendarComponent implements OnInit {
 
   ngOnInit() {
     // Resultado del flujo OAuth (el backend redirige aquí con ?google=…)
+    const q = this.route.snapshot.queryParamMap;
+    if (q.get('view') === 'day') {
+      const d = q.get('day');
+      if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) this.selected.set(d);
+      this.view.set('day');
+    }
     const result = this.route.snapshot.queryParamMap.get('google');
     if (result) {
       if (result === 'connected') this.toast.success('Google Calendar conectado');
@@ -217,7 +231,7 @@ export class CalendarComponent implements OnInit {
   private loadTasks() { this.api.tasks().subscribe({ next: t => this.tasks.set(t), error: e => this.toast.error(e) }); }
   private loadEvents() {
     if (!this.status()?.connected) { this.events.set([]); return; }
-    const start = parseDay(this.gridStart()), end = parseDay(addDays(this.gridStart(), this.view() === 'week' ? 7 : 42));
+    const start = parseDay(this.gridStart()), end = parseDay(addDays(this.gridStart(), this.view() === 'week' ? 7 : this.view() === 'day' ? 1 : 42));
     this.api.calendarEvents(start.toISOString(), end.toISOString()).subscribe({
       // Al pedir los eventos el servidor trae también lo que se haya movido o renombrado en Google
       next: e => { this.events.set(e); this.loadTasks(); },
@@ -229,7 +243,8 @@ export class CalendarComponent implements OnInit {
   }
 
   shift(n: number) {
-    if (this.view() === 'week') this.weekStart.set(addDays(this.weekStart(), 7 * n));
+    if (this.view() === 'day') this.selected.set(addDays(this.selected(), n));
+    else if (this.view() === 'week') this.weekStart.set(addDays(this.weekStart(), 7 * n));
     else { const m = this.month(); this.month.set(new Date(m.getFullYear(), m.getMonth() + n, 1)); }
     this.loadEvents();
   }
@@ -240,9 +255,9 @@ export class CalendarComponent implements OnInit {
     this.selected.set(today());
     this.loadEvents();
   }
-  setView(v: 'month' | 'week') {
+  setView(v: 'month' | 'week' | 'day') {
     if (v === 'week') this.weekStart.set(mondayOf(this.selected()));  // la semana del día seleccionado
-    else { const d = parseDay(this.weekStart()); this.month.set(new Date(d.getFullYear(), d.getMonth(), 1)); }
+    else if (v === 'month') { const d = parseDay(this.selected()); this.month.set(new Date(d.getFullYear(), d.getMonth(), 1)); }
     this.view.set(v);
     localStorage.setItem('vf-cal-view', v);
     this.loadEvents();

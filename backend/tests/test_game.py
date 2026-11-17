@@ -31,12 +31,12 @@ def test_task_xp_depends_on_difficulty_time_and_punctuality(client, auth):
     assert complete()[0] == 20  # normal por defecto
     assert complete(difficulty=4)[0] == 80
     assert complete(difficulty=3, priority="urgent")[0] == 45
-    assert complete(difficulty=2, estimated_hours=3)[0] == 35  # sin tiempo registrado cuenta la estimación
+    assert complete(difficulty=2, estimated_minutes=180)[0] == 35  # sin tiempo registrado cuenta la estimación
     assert complete(difficulty=2, due_date="2099-01-01T00:00:00Z")[0] == 25  # a tiempo: +25 %
     assert complete(difficulty=2, due_date="2020-01-01T00:00:00Z")[0] == 20  # tarde: sin extra
 
     # tiempo registrado: 1 XP por cada 5 minutos, hasta 60
-    t = client.post(T, headers=auth, json={"title": "larga", "estimated_hours": 8}).json()
+    t = client.post(T, headers=auth, json={"title": "larga", "estimated_minutes": 480}).json()
     client.put(f"{T}/{t['id']}", headers=auth, json={"time_spent_seconds": 2 * 3600})
     before = xp(client, auth)
     client.put(f"{T}/{t['id']}", headers=auth, json={"status": "completed"})
@@ -87,8 +87,8 @@ def test_profile_levels_and_history(client, auth):
     assert (p["xp"], p["level"], p["rank"], p["level_start_xp"], p["next_level_xp"]) == (320, 3, "Recluta", 300, 600)
 
     h = client.get(f"{G}/history", headers=auth, params={"days": 7}).json()
-    assert len(h["daily"]) == 7 and h["daily"][-1] == {"date": h["daily"][-1]["date"], "task": 320, "habit": 0, "focus": 0, "total": 320}
-    assert h["by_kind"] == {"task": 320, "habit": 0, "focus": 0} and h["today_xp"] == 320 and h["week_xp"] == 320
+    assert len(h["daily"]) == 7 and h["daily"][-1] == {"date": h["daily"][-1]["date"], "task": 320, "habit": 0, "focus": 0, "review": 0, "total": 320}
+    assert h["by_kind"] == {"task": 320, "habit": 0, "focus": 0, "review": 0} and h["today_xp"] == 320 and h["week_xp"] == 320
     assert h["recent"][0]["detail"] == "Épica 3" and h["recent"][0]["created_at"].endswith(("Z", "+00:00"))
     ach = {a["id"]: a for a in h["achievements"]}
     assert ach["first"]["unlocked"] and ach["epic"]["unlocked"] and not ach["tasks25"]["unlocked"] and ach["tasks25"]["progress"] == 4

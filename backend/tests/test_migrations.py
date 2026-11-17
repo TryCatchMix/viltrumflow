@@ -37,11 +37,12 @@ def test_upgrade_keeps_existing_rows():
             "INSERT INTO users (id, email, username, hashed_password, is_active, theme, language, created_at, updated_at) "
             "VALUES (1, 'a@example.com', 'ana', 'x', true, 'auto', 'es', '2026-01-01', '2026-01-01')"))
         conn.execute(text(
-            "INSERT INTO tasks (id, title, status, priority, all_day, tags, position, user_id, created_at, updated_at) "
-            "VALUES (1, 'Antigua', 'todo', 'medium', true, '', 0, 1, '2026-01-01', '2026-01-01')"))
+            "INSERT INTO tasks (id, title, status, priority, all_day, tags, position, user_id, created_at, updated_at, estimated_hours) "
+            "VALUES (1, 'Antigua', 'todo', 'medium', true, '', 0, 1, '2026-01-01', '2026-01-01', 3)"))
     init_db()
     with engine.connect() as conn:
         assert conn.execute(text("SELECT recurrence, recurred, reminder_minutes FROM tasks")).one() == ("none", False, None)
+        assert conn.execute(text("SELECT estimated_minutes FROM tasks")).scalar() == 180  # horas → minutos
         assert conn.execute(text("SELECT timezone, digest_hour, daily_digest FROM users")).one() == ("UTC", 8, False)
 
 
@@ -56,4 +57,4 @@ def test_legacy_database_without_version_table_is_stamped():
     init_db()
     with engine.connect() as conn:
         assert "recurrence" in {c["name"] for c in inspect(conn).get_columns("tasks")}
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0006"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0007"

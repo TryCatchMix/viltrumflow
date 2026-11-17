@@ -18,8 +18,12 @@ notas Markdown con `[[enlaces]]` al estilo Obsidian, vista de grafo y panel con 
 | **Historial** | Versiones anteriores de cada nota, con vista previa y restauración |
 | **Etiquetas** | `#etiqueta` y anidadas `#proyecto/web`, filtro por etiqueta |
 | **Grafo** | Notas, enlaces, notas sin crear y (opcional) etiquetas; zoom, arrastre, resaltado de vecinos y búsqueda. Cada nota muestra además su grafo local |
-| **Captura rápida** | «Llamar a Juan mañana a las 10 #trabajo !alta @web cada semana» rellena fecha, hora, etiquetas, prioridad, proyecto y repetición |
-| **Hoy** | Lista diaria al estilo de una checklist: rutinas que se repiten los días que elijas y las tareas del día, con anillo de avance |
+| **Captura rápida** | «Llamar a Juan mañana a las 10 ~15m #trabajo !alta @web cada semana» rellena fecha, hora, duración, etiquetas, prioridad, proyecto y repetición |
+| **Hoy** | Lista diaria al estilo de una checklist: rutinas y tareas del día, objetivos de la semana y aviso de revisión pendiente |
+| **Rutinas flexibles** | Días concretos o «N veces por semana», cantidad diaria («8 vasos») y aviso a la hora prevista |
+| **Planificador del día** | Vista *Día* del calendario: arrastra tareas y rutinas a una hora, mueve bloques y alarga su duración |
+| **Revisión semanal** | Resumen de la semana, reprogramar lo atrasado y fijar objetivos para la siguiente |
+| **Avisos con la app cerrada** | Notificaciones Web Push de recordatorios, rutinas, tareas asignadas y fin del Pomodoro |
 | **Estadísticas de rutinas** | Qué se cumple y qué no día a día, porcentaje, rachas, a qué hora se marcan, puntualidad frente a la hora prevista y cumplimiento por día de la semana |
 | **Pomodoro** | Reloj configurable (concentración, descansos, bloques por serie, inicio automático, sonido y aviso); cada bloque suma tiempo a la tarea elegida |
 | **Progreso** | Experiencia por tareas, rutinas y concentración; niveles, diez rangos del Imperio, logros y gráficos |
@@ -115,7 +119,24 @@ Si conectaste la cuenta antes de existir la elección de calendario, desconecta 
 
 **Hoy** reúne las rutinas del día y las tareas con fecha de hoy (más las atrasadas). Una rutina es un check que
 vuelve a aparecer cada día que le toca; se crea escribiéndola en «Añadir rutina diaria» y en la pestaña *Rutinas*
-se eligen sus días, una hora prevista y su dificultad. Si olvidaste marcar algo, puedes volver hasta 7 días atrás.
+se configura:
+
+- **Frecuencia**: días concretos de la semana, o «N veces por semana» (aparece todos los días y se cumple al llegar a N).
+- **Cantidad diaria**: por ejemplo 8 vasos o 20 páginas; se suma con los botones − y +, y cuenta como hecha al llegar.
+- **Hora prevista** y, si quieres, **aviso** a esa hora mientras siga pendiente (en la app, o con la app cerrada si
+  activaste los avisos push).
+
+Si olvidaste marcar algo, puedes volver hasta 7 días atrás.
+
+**Planificar por horas** (vista *Día* del calendario, o el enlace desde «Hoy»): las tareas del día sin hora, las
+atrasadas y las rutinas sin hora esperan en «Por colocar». Arrástralas a una franja (en tramos de 15 minutos), mueve
+los bloques, alarga su duración tirando del borde inferior o devuélvelas a «Por colocar» para quitarles la hora. La
+duración de un bloque es la estimación de la tarea (30 minutos si no tiene); con Google Calendar conectado, el evento
+dura lo mismo.
+
+**Revisión semanal** (menú lateral; «Hoy» la recuerda de viernes a martes): tres pasos con el resumen de la semana,
+lo que se quedó atrás para reprogramarlo, darlo por hecho o archivarlo, y hasta 5 objetivos para la semana siguiente
+que luego se ven y se marcan en «Hoy». Terminarla da 30 XP una vez por semana.
 
 La pestaña **Estadísticas** muestra, para 14, 30 o 90 días: porcentaje de cumplimiento, días completos, rachas,
 una cuadrícula día a día (cumplida / no cumplida / pendiente / no tocaba), a qué hora sueles marcarlas y qué
@@ -130,11 +151,12 @@ un bloque, su tiempo se suma a la tarea elegida.
 | Origen | Experiencia |
 | --- | --- |
 | Tarea completada | 10 / 20 / 40 / 80 según la dificultad (fácil, normal, difícil, épica) |
-| Esfuerzo | +1 por cada 5 minutos registrados en la tarea (máx. 60); sin registro, +5 por hora estimada (máx. 40) |
+| Esfuerzo | +1 por cada 5 minutos registrados en la tarea (máx. 60); sin registro, +1 por cada 12 minutos estimados (máx. 40) |
 | Puntualidad y prioridad | +25 % de la base si se termina antes de su fecha; +3 prioridad alta, +5 urgente |
 | Subtarea | 5 |
 | Rutina | 5 / 10 / 15 / 25 según la dificultad, +1 por día de racha (máx. 10) |
 | Concentración | 1 por cada 5 minutos de bloque terminado |
+| Revisión semanal | 30, una vez por semana |
 
 Reabrir una tarea o desmarcar una rutina retira su experiencia, y cada cosa puntúa una sola vez. En un proyecto
 compartido, la experiencia es para quien completa la tarea. Cada nivel pide 100 XP más que el anterior
@@ -143,6 +165,12 @@ Aspirante (1), Recluta (3), Soldado (5), Guerrero (8), Veterano (12), Centurión
 Comandante (25), General (30) y Regente del Imperio (40).
 
 ## Recordatorios y email
+
+- **Con la app cerrada (Web Push)**: en *Ajustes → Recordatorios y avisos → Avisos con la app cerrada* pulsa
+  «Activar» en cada dispositivo. Llegan los recordatorios de tareas, las rutinas a su hora, las tareas que te asignan
+  y el final de cada fase del Pomodoro. Requiere la versión publicada por HTTPS (o `localhost`), no `ng serve`; en
+  iPhone y iPad, con la app añadida a la pantalla de inicio (iOS 16.4 o posterior). Las claves VAPID se generan solas
+  la primera vez; `VAPID_SUBJECT` (opcional) identifica el servidor ante los servicios de push (`mailto:` o `https://`).
 
 - **En el navegador**: en *Ajustes → Recordatorios y avisos* pulsa «Activar». Los avisos llegan mientras
   ViltrumFlow está abierto en una pestaña (no hay notificaciones push con la app cerrada).
@@ -280,6 +308,7 @@ Todas las rutas cuelgan de `/api/v1` y, salvo registro e inicio de sesión, requ
 | Tareas | `GET/POST /tasks` · `GET/PUT/DELETE /tasks/{id}` · `PATCH /tasks/{id}/move` · `/tasks/{id}/comments` |
 | Proyectos | `GET/POST /projects` · `GET/PUT/DELETE /projects/{id}` · `GET/POST /projects/{id}/members` · `PUT/DELETE /projects/{id}/members/{user_id}` |
 | Rutinas | `GET/POST /habits` · `PUT/DELETE /habits/{id}` · `GET /habits/day` · `PUT /habits/{id}/check` · `GET /habits/stats` |
+| Avisos push y revisión | `GET /push/key` · `POST /push/subscribe` · `POST /push/unsubscribe` · `POST /push/test` · `GET/PUT /review` · `POST /review/complete` · `GET /review/today` · `PUT /review/goal` |
 | Pomodoro y progreso | `GET/PUT /pomodoro/settings` · `POST /pomodoro/sessions` · `GET /pomodoro/stats` · `GET /game/profile` · `GET /game/history` |
 | Papelera | `GET/DELETE /trash` · `POST /trash/{note\|task}/{id}/restore` · `DELETE /trash/{note\|task}/{id}` |
 | Notas | `GET/POST /notes` · `GET/PUT/DELETE /notes/{id}` · `GET /notes/by-title/{título}` · `POST /notes/daily` · `GET /notes/graph` · `GET /notes/tags` · `GET /notes/checklist` · `PATCH /notes/{id}/checklist` · `GET /notes/export` · `POST /notes/import` |

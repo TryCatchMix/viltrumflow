@@ -37,8 +37,10 @@ test('notas: enlaces, autocompletado, autoguardado y casillas', async ({ browser
   // autocompletado de [[ y autoguardado
   await typeAtEnd(page, '\nEnlace a [[Arq');
   await expect(page.locator('.cm-tooltip-autocomplete')).toContainText('Arquitectura');
+  // CodeMirror ignora las teclas durante 75 ms tras abrir la lista (evita aceptar por accidente)
+  await page.waitForTimeout(150);
   await page.keyboard.press('Enter');
-  await expect.poll(async () => (await api('GET', '/notes/by-title/Proyecto')).content).toContain('[[Arquitectura]]');
+  await expect.poll(async () => (await api('GET', '/notes/by-title/Proyecto')).content, { message: 'contenido' }).toContain('[[Arquitectura]]');
   await expect(page.locator('.status')).toHaveText('Guardado');
   await expect(page.locator('.side .out', { hasText: 'Arquitectura' })).toBeVisible();
 

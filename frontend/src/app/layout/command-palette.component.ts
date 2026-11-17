@@ -72,6 +72,7 @@ export class CommandPaletteComponent {
     { icon: 'home', label: 'Ir a Inicio', run: () => this.router.navigate(['/dashboard']) },
     { icon: 'sun', label: 'Ir a Hoy (rutinas y tareas del día)', run: () => this.router.navigate(['/today']) },
     { icon: 'target', label: 'Ir a Enfoque (Pomodoro)', run: () => this.router.navigate(['/focus']) },
+    { icon: 'history', label: 'Hacer la revisión semanal', run: () => this.router.navigate(['/review']) },
     { icon: 'shield', label: 'Ir a Progreso (nivel y rangos)', run: () => this.router.navigate(['/progress']) },
     { icon: 'check', label: 'Ir a Tareas', run: () => this.router.navigate(['/tasks']) },
     { icon: 'board', label: 'Ir a Tablero', run: () => this.router.navigate(['/kanban']) },

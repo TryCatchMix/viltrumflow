@@ -4,6 +4,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService } from '../core/api.service';
 import { ImportResult } from '../core/models';
 import { NotificationService } from '../core/notification.service';
+import { PushService } from '../core/push.service';
 import { IconComponent } from '../shared/icon.component';
 import { AuthService } from '../core/auth.service';
 import { Theme, ThemeService } from '../core/theme.service';
@@ -44,6 +45,17 @@ import { ToastService } from '../core/toast.service';
         @else if (notif.permission() === 'granted') { <span class="chip"><span class="ok"></span> Activadas</span> }
         @else if (notif.permission() === 'denied') { <span class="chip" title="Cámbialo en los permisos del sitio de tu navegador">Bloqueadas en el navegador</span> }
         @else { <button class="btn" (click)="notif.requestPermission()"><app-icon name="bell" /> Activar</button> }
+      </div>
+      <div class="opt">
+        <div><strong>Avisos con la app cerrada</strong>
+          <p class="muted">Recordatorios, rutinas, tareas asignadas y el final del Pomodoro llegan como notificación del sistema aunque ViltrumFlow no esté abierto. Se activa en cada dispositivo.</p></div>
+        @switch (push.state()) {
+          @case ('unsupported') { <span class="chip" title="Hace falta la versión publicada (no el modo desarrollo) en un navegador compatible; en iPhone, con la app instalada en la pantalla de inicio">No disponible aquí</span> }
+          @case ('denied') { <span class="chip" title="Cámbialo en los permisos del sitio de tu navegador">Bloqueadas en el navegador</span> }
+          @case ('on') { <div class="row"><button class="btn sm" (click)="testPush()">Probar</button><button class="btn sm" (click)="togglePush(false)">Desactivar</button></div> }
+          @case ('busy') { <span class="chip">Un momento…</span> }
+          @default { <button class="btn" (click)="togglePush(true)"><app-icon name="bell" /> Activar</button> }
+        }
       </div>
       @if (!emailReady()) {
         <div class="box"><p class="muted">El envío de correos no está configurado en el servidor (variables <code>SMTP_*</code>, ver README). Los avisos por email no se enviarán hasta entonces.</p></div>
@@ -112,6 +124,7 @@ import { ToastService } from '../core/toast.service';
 })
 export class SettingsComponent implements AfterViewInit {
   notif = inject(NotificationService);
+  push = inject(PushService);
   private api = inject(ApiService);
   private route = inject(ActivatedRoute);
   hours = Array.from({ length: 24 }, (_, i) => i);
@@ -137,6 +150,17 @@ export class SettingsComponent implements AfterViewInit {
     this.api.notificationStatus().subscribe(s => this.emailReady.set(s.email_configured));
     const id = this.route.snapshot.fragment;
     if (id) setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }));
+  }
+
+  togglePush(on: boolean) {
+    (on ? this.push.enable() : this.push.disable()).then(
+      () => this.toast.success(on ? 'Avisos activados en este dispositivo' : 'Avisos desactivados en este dispositivo'),
+      e => this.toast.error(e, 'No se pudieron activar los avisos'),
+    );
+  }
+  testPush() {
+    this.push.test().then(r => this.toast.show(r.delivered ? 'Notificación de prueba enviada' : 'No se pudo entregar: vuelve a activar los avisos', r.delivered ? 'success' : 'error'),
+      e => this.toast.error(e));
   }
 
   setPref(data: { email_reminders?: boolean; daily_digest?: boolean; digest_hour?: number }) {

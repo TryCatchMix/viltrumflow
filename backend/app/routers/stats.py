@@ -43,7 +43,7 @@ class Overview(BaseModel):
     timeline: List[DayPoint]
     projects: List[ProjectStat]
     top_tags: List[dict]
-    time_tracking: List[dict]  # tareas con estimación o tiempo registrado: {id, title, estimated_hours, spent_hours}
+    time_tracking: List[dict]  # tareas con estimación o tiempo registrado: {id, title, estimated_hours, spent_hours} (horas con decimales)
     spent_hours_week: float
 
 
@@ -123,8 +123,8 @@ def overview(
         projects=projects,
         top_tags=[{"tag": t, "count": c} for t, c in tag_c.most_common(8)],
         time_tracking=[
-            {"id": t.id, "title": t.title, "estimated_hours": t.estimated_hours, "spent_hours": round((t.time_spent_seconds or 0) / 3600, 2)}
-            for t in sorted(live, key=lambda t: t.updated_at, reverse=True) if (t.time_spent_seconds or 0) > 0 and t.estimated_hours
+            {"id": t.id, "title": t.title, "estimated_hours": round(t.estimated_minutes / 60, 2), "spent_hours": round((t.time_spent_seconds or 0) / 3600, 2)}
+            for t in sorted(live, key=lambda t: t.updated_at, reverse=True) if (t.time_spent_seconds or 0) > 0 and t.estimated_minutes
         ][:8],
         spent_hours_week=round(sum((t.time_spent_seconds or 0) for t in live if _day(t.updated_at, offset) >= week_ago) / 3600, 1),
     )

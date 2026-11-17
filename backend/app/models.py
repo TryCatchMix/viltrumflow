@@ -64,6 +64,9 @@ class User(TimestampMixin, Base):
     last_digest_on: Mapped[Optional[date]] = mapped_column(Date)
     # Ajustes del reloj Pomodoro (JSON); None = valores por defecto
     pomodoro: Mapped[Optional[str]] = mapped_column(Text)
+    # Fin de la fase de Pomodoro en curso: el servidor avisa por push aunque la app esté cerrada
+    pomodoro_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
+    pomodoro_phase: Mapped[Optional[str]] = mapped_column(String(10))
 
     projects: Mapped[List["Project"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     tasks: Mapped[List["Task"]] = relationship(
@@ -117,7 +120,7 @@ class Task(TimestampMixin, Base):
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
     all_day: Mapped[bool] = mapped_column(Boolean, default=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    estimated_hours: Mapped[Optional[int]] = mapped_column(Integer)
+    estimated_minutes: Mapped[Optional[int]] = mapped_column(Integer)  # duración prevista; en el planificador, el alto del bloque
     tags: Mapped[str] = mapped_column(String(500), default="")  # separadas por comas
     position: Mapped[int] = mapped_column(Integer, default=0)
     google_event_id: Mapped[Optional[str]] = mapped_column(String(255))
@@ -262,6 +265,13 @@ class Habit(TimestampMixin, Base):
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     position: Mapped[int] = mapped_column(Integer, default=0)
     start_day: Mapped[date] = mapped_column(Date)  # día (local del usuario) desde el que cuenta
+    # Cantidad diaria («8 vasos»): se da por cumplida al llegar a target_count
+    target_count: Mapped[int] = mapped_column(Integer, default=1)
+    unit: Mapped[str] = mapped_column(String(20), default="")
+    # «N veces por semana»: si tiene valor, aparece todos los días y se cumple al llegar a N días en la semana
+    weekly_target: Mapped[Optional[int]] = mapped_column(Integer)
+    remind: Mapped[bool] = mapped_column(Boolean, default=False)  # avisar a la hora prevista si sigue pendiente
+    last_reminded_on: Mapped[Optional[date]] = mapped_column(Date)
 
     checks: Mapped[List["HabitCheck"]] = relationship(back_populates="habit", cascade="all, delete-orphan")
 
@@ -275,6 +285,7 @@ class HabitCheck(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     habit_id: Mapped[int] = mapped_column(ForeignKey("habits.id", ondelete="CASCADE"), index=True)
     day: Mapped[date] = mapped_column(Date, index=True)
+    count: Mapped[int] = mapped_column(Integer, default=1)
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     habit: Mapped[Habit] = relationship(back_populates="checks")
@@ -305,6 +316,43 @@ class PomodoroSession(Base):
     task_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"))
     seconds: Mapped[int] = mapped_column(Integer)
     ended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class PushSubscription(Base):
+    """Navegador o dispositivo que recibe notificaciones push (Web Push)."""
+
+    __tablename__ = "push_subscriptions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    endpoint: Mapped[str] = mapped_column(String(1000), unique=True)
+    p256dh: Mapped[str] = mapped_column(String(200))
+    auth: Mapped[str] = mapped_column(String(100))
+    user_agent: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ServerKey(Base):
+    """Claves propias del servidor generadas al primer uso (p. ej. las VAPID de Web Push)."""
+
+    __tablename__ = "server_keys"
+
+    name: Mapped[str] = mapped_column(String(50), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+
+
+class WeeklyReview(TimestampMixin, Base):
+    """Revisión de una semana (de lunes a domingo) y objetivos para la siguiente."""
+
+    __tablename__ = "weekly_reviews"
+    __table_args__ = (UniqueConstraint("user_id", "week_start", name="uq_review_user_week"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    week_start: Mapped[date] = mapped_column(Date)
+    goals: Mapped[str] = mapped_column(Text, default="[]")  # JSON: [{"text": ..., "done": bool}]
+    reflection: Mapped[str] = mapped_column(Text, default="")
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
 
 class GoogleAccount(TimestampMixin, Base):

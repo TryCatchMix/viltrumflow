@@ -36,6 +36,28 @@ def put_settings(data: schemas.PomodoroSettings, user: User = Depends(get_curren
     return data
 
 
+class TimerIn(schemas.BaseModel):
+    ends_at: datetime
+    phase: str = schemas.Field(pattern="^(focus|short|long)$")
+
+
+@router.put("/timer", status_code=204)
+def set_timer(data: TimerIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """El reloj está en marcha y termina a esa hora: el servidor avisará por push aunque la app esté cerrada."""
+    ends = data.ends_at if data.ends_at.tzinfo else data.ends_at.replace(tzinfo=timezone.utc)
+    if not timedelta(0) < ends - datetime.now(timezone.utc) <= timedelta(hours=4):
+        raise HTTPException(400, "Hora de fin no válida")
+    user.pomodoro_ends_at, user.pomodoro_phase = ends, data.phase
+    db.commit()
+
+
+@router.delete("/timer", status_code=204)
+def clear_timer(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Reloj en pausa, reiniciado o terminado con la app abierta: no hace falta avisar."""
+    user.pomodoro_ends_at, user.pomodoro_phase = None, None
+    db.commit()
+
+
 @router.post("/sessions", response_model=schemas.PomodoroSessionOut, status_code=201)
 def log_session(data: schemas.PomodoroSessionIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Registra un bloque de concentración terminado: suma su tiempo a la tarea elegida y da experiencia."""

@@ -41,7 +41,7 @@ export interface TrashItem { kind: 'note' | 'task'; id: number; title: string; d
 export interface Subtask { id: number; title: string; status: Status; }
 export interface Task {
   id: number; title: string; description?: string | null; status: Status; priority: Priority;
-  due_date?: string | null; all_day: boolean; completed_at?: string | null; estimated_hours?: number | null;
+  due_date?: string | null; all_day: boolean; completed_at?: string | null; estimated_minutes?: number | null;
   tags: string[]; position: number; project_id?: number | null; parent_task_id?: number | null;
   note_id?: number | null; google_event_id?: string | null; recurrence: Recurrence; reminder_minutes?: number | null;
   difficulty: number; time_spent_seconds: number; timer_started_at?: string | null;
@@ -51,7 +51,7 @@ export interface Task {
   pending?: boolean;
 }
 export type TaskInput = Partial<Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'due_date' | 'all_day'
-  | 'estimated_hours' | 'tags' | 'project_id' | 'parent_task_id' | 'note_id' | 'recurrence' | 'reminder_minutes' | 'assignee_id' | 'time_spent_seconds' | 'difficulty'>>;
+  | 'estimated_minutes' | 'tags' | 'project_id' | 'parent_task_id' | 'note_id' | 'recurrence' | 'reminder_minutes' | 'assignee_id' | 'time_spent_seconds' | 'difficulty'>>;
 export interface Comment { id: number; content: string; task_id: number; author_id: number; author_name: string; created_at: string; }
 
 export interface NoteSummary {
@@ -81,7 +81,7 @@ export interface Overview {
   spent_hours_week: number;
 }
 
-export interface Reminder { kind: 'reminder' | 'assigned'; task_id: number; title: string; due_date?: string | null; all_day: boolean; by?: string | null; }
+export interface Reminder { kind: 'reminder' | 'assigned' | 'habit'; task_id: number; title: string; due_date?: string | null; all_day: boolean; by?: string | null; }
 export interface ImportResult { created: number; updated: number; skipped: number; errors: string[]; }
 
 export interface CalendarStatus { configured: boolean; connected: boolean; email?: string | null; auto_sync: boolean; calendar_id: string; }
@@ -95,13 +95,14 @@ export const WEEKDAY_NAME = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes
 
 export interface Habit {
   id: number; title: string; days: string; target_time?: string | null; difficulty: number; color: string;
-  is_archived: boolean; start_day: string;
+  is_archived: boolean; start_day: string; target_count: number; unit: string; weekly_target?: number | null; remind: boolean;
 }
-export type HabitInput = Partial<Pick<Habit, 'title' | 'days' | 'target_time' | 'difficulty' | 'color' | 'is_archived'>>;
-export interface HabitDayItem extends Habit { checked: boolean; checked_at?: string | null; streak: number; xp: number; }
-export type HabitState = 'done' | 'missed' | 'off' | 'pending';
+export type HabitInput = Partial<Pick<Habit, 'title' | 'days' | 'target_time' | 'difficulty' | 'color' | 'is_archived' | 'target_count' | 'unit' | 'weekly_target' | 'remind'>>;
+export interface HabitDayItem extends Habit { checked: boolean; count: number; checked_at?: string | null; streak: number; week_done: number; xp: number; }
+export type HabitState = 'done' | 'missed' | 'off' | 'pending' | 'partial' | 'free';
 export interface HabitStat {
   id: number; title: string; color: string; target_time?: string | null; days: string; scheduled: number; done: number;
+  period: 'day' | 'week'; weekly_target?: number | null; target_count: number; unit: string;
   rate: number | null; streak: number; best_streak: number; avg_minute: number | null; on_time_rate: number | null; states: HabitState[];
 }
 export interface HabitStats {
@@ -118,15 +119,27 @@ export interface PomodoroStats {
   total_minutes: number; by_task: { title: string; minutes: number }[];
 }
 
+export interface ReviewTask { id: number; title: string; difficulty: number; priority: Priority; due_day: string | null; project: string | null; can_edit: boolean; }
+export interface Goal { text: string; done: boolean; }
+export interface WeeklyReview {
+  week_start: string; week_end: string; is_current: boolean;
+  completed: ReviewTask[]; carried_over: ReviewTask[]; no_date: ReviewTask[]; upcoming_next_week: number;
+  xp: Record<XpKind, number>; xp_total: number; focus_minutes: number; notes_created: number;
+  habits: { rate: number | null; done: number; scheduled: number; perfect_days: number;
+    items: { id: number; title: string; color: string; rate: number | null; done: number; scheduled: number; period: 'day' | 'week'; streak: number }[] };
+  previous_goals: Goal[]; goals: Goal[]; reflection: string; completed_at: string | null; xp_reward: number;
+}
+export interface ReviewToday { goals_week: string; goals: Goal[]; pending_review: string | null; }
+
 export interface Rank { name: string; min_level: number; min_xp: number; }
 export interface GameProfile {
   xp: number; level: number; level_start_xp: number; next_level_xp: number; rank_index: number; rank: string;
   next_rank: string | null; next_rank_level: number | null; ranks: Rank[];
 }
-export type XpKind = 'task' | 'habit' | 'focus';
-export const XP_KIND_LABEL: Record<XpKind, string> = { task: 'Tareas', habit: 'Rutinas', focus: 'Concentración' };
+export type XpKind = 'task' | 'habit' | 'focus' | 'review';
+export const XP_KIND_LABEL: Record<XpKind, string> = { task: 'Tareas', habit: 'Rutinas', focus: 'Concentración', review: 'Revisión semanal' };
 export interface GameHistory {
-  daily: { date: string; task: number; habit: number; focus: number; total: number }[];
+  daily: { date: string; task: number; habit: number; focus: number; review: number; total: number }[];
   by_kind: Record<XpKind, number>; today_xp: number; week_xp: number;
   recent: { kind: XpKind; amount: number; detail: string; created_at: string }[];
   achievements: { id: string; name: string; description: string; progress: number; goal: number; unlocked: boolean }[];
