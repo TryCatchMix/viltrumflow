@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService } from '../core/api.service';
 import { ReviewToday, DIFFICULTY_LABEL, Habit, HabitDayItem, HabitInput, HabitState, HabitStats, PRIORITY_LABEL, Task, WEEKDAY_NAME, WEEKDAY_SHORT } from '../core/models';
+import { GameService } from '../core/game.service';
 import { ToastService } from '../core/toast.service';
 import { addDays, isOverdue, parseDay, taskDay, taskTime, toDue, today } from '../core/util';
 import { Bar, BarListComponent } from '../shared/bar-list.component';
@@ -15,7 +16,7 @@ import { TaskDialogService } from '../shared/task-dialog.service';
 const LONG = new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long' });
 const SHORT = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' });
 const COLORS = ['#7c5cff', '#2a78d6', '#1baf7a', '#eda100', '#eb6834', '#e34948', '#e87ba4', '#6b7280'];
-const STATE_LABEL: Record<HabitState, string> = { done: 'cumplida', missed: 'no cumplida', off: 'no tocaba', pending: 'pendiente (hoy)', partial: 'a medias', free: 'día libre (rutina semanal)' };
+const STATE_LABEL: Record<HabitState, string> = { done: 'cumplida', missed: 'no cumplida', off: 'no tocaba', pending: 'pendiente (hoy)', partial: 'a medias', free: 'día libre (rutina semanal)', frozen: 'no cumplida, pero un protector salvó la racha' };
 const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
 
 @Component({
@@ -58,6 +59,11 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
           <p class="muted">{{ total() === 0 ? 'Nada programado para este día' : done() === total() ? 'Día completo. Buen trabajo.' : (total() - done()) + ' por hacer' }}</p></div>
       </div>
 
+      @if (savedYesterday(); as names) {
+        <div class="card banner frost row" role="status"><app-icon name="snow" />
+          <span>Ayer un protector salvó tu racha de <strong>{{ names }}</strong>.</span><span class="spacer"></span>
+          <a class="btn sm" routerLink="/missions">Ver protectores</a></div>
+      }
       @if (info()?.goals?.length) {
         <h3 class="group">Objetivos de la semana <span class="muted">{{ goalsDone() }}/{{ info()!.goals.length }}</span></h3>
         <div class="card list">
@@ -155,7 +161,7 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
 
             <section class="card panel wide">
               <header class="row"><h2>Día a día: qué se cumplió y qué no</h2><span class="spacer"></span>
-                <span class="legend"><i class="cell done"></i> cumplida <i class="cell partial"></i> a medias <i class="cell missed"></i> no cumplida <i class="cell pending"></i> pendiente <i class="cell off"></i> no tocaba o libre</span></header>
+                <span class="legend"><i class="cell done"></i> cumplida <i class="cell partial"></i> a medias <i class="cell frozen"></i> salvada <i class="cell missed"></i> no cumplida <i class="cell pending"></i> pendiente <i class="cell off"></i> no tocaba o libre</span></header>
               <div class="heat">
                 <table>
                   <thead><tr><th></th>@for (d of s.days; track d; let i = $index) { <th>{{ (s.days.length - 1 - i) % 5 === 0 ? dayNum(d) : '' }}</th> }</tr></thead>
@@ -270,6 +276,7 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
   styles: [`
     .cap::first-letter { text-transform: uppercase; }
     .banner { padding: 12px 16px; gap: 12px; margin-bottom: 12px; color: var(--text); border-color: var(--accent); background: var(--accent-soft); &:hover { text-decoration: none; } span { font-size: 13.5px; } }
+    .frost { border-color: var(--series-1); background: color-mix(in srgb, var(--series-1) 12%, var(--surface)); app-icon { color: var(--series-1); } }
     .plan { font-weight: 400; font-size: 12.5px; display: inline-flex; gap: 4px; align-items: center; }
     .summary { padding: 14px 18px; gap: 16px; margin-bottom: 4px; strong { font-size: 20px; font-weight: 600; } }
     .group { margin: 18px 0 8px; display: flex; gap: 8px; align-items: baseline; font-size: 13px; color: var(--text-2); .muted { font-weight: 400; } }
@@ -297,6 +304,7 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
     .cell { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: middle; box-sizing: border-box;
       &.done { background: var(--good); } &.missed { border: 2px solid var(--critical); }
       &.pending { border: 2px dashed var(--text-3); } &.partial { background: linear-gradient(to top, var(--good) 50%, transparent 50%); border: 2px solid var(--good); }
+      &.frozen { border: 2px solid var(--series-1); background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--series-1) 45%, transparent) 0 2px, transparent 2px 4px); }
       &.off, &.free { width: 4px; height: 4px; border-radius: 50%; background: var(--surface-3); margin: 5px; } }
     .heat { overflow-x: auto; table { border-collapse: separate; border-spacing: 2px; } th { font-size: 11px; font-weight: 400; color: var(--text-3); text-align: center; padding: 0; min-width: 14px; }
       tbody th { text-align: left; font-size: 13px; color: var(--text-2); max-width: 170px; padding-right: 10px; position: sticky; left: 0; background: var(--surface); .dot { display: inline-block; margin-right: 6px; } }
@@ -338,6 +346,14 @@ export class TodayComponent implements OnInit {
     weekly: boolean; weekly_target: number; target_count: number; unit: string; remind: boolean } | null>(null);
   newHabit = '';
   info = signal<ReviewToday | null>(null);
+  private game = inject(GameService);
+  /** Rutinas cuya racha salvó ayer un protector. */
+  savedYesterday = computed(() => {
+    if (!this.isToday()) return '';
+    const y = addDays(this.todayStr, -1);
+    const names = (this.game.wallet()?.recent_freezes ?? []).filter(f => f.day === y).map(f => `«${f.habit}»`);
+    return names.join(', ');
+  });
   goalsDone = computed(() => this.info()?.goals.filter(g => g.done).length ?? 0);
   newTask = '';
 

@@ -2,7 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { merge } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { ApiService } from './api.service';
-import { GameProfile } from './models';
+import { GameProfile, Wallet } from './models';
 import { ToastService } from './toast.service';
 
 export interface LevelUp { level: number; rank: string; rankIndex: number; newRank: boolean; }
@@ -14,6 +14,8 @@ export class GameService {
   private toast = inject(ToastService);
 
   readonly profile = signal<GameProfile | null>(null);
+  /** Monedas y protectores de racha. */
+  readonly wallet = signal<Wallet | null>(null);
   /** Subida de nivel pendiente de celebrar (la pinta el layout). */
   readonly levelUp = signal<LevelUp | null>(null);
 
@@ -28,6 +30,7 @@ export class GameService {
   }
 
   refresh() {
+    this.api.wallet().subscribe({ next: w => this.wallet.set(w), error: () => {} });
     this.api.gameProfile().subscribe({
       next: p => {
         const prev = this.profile();
@@ -41,5 +44,5 @@ export class GameService {
     });
   }
 
-  reset() { this.profile.set(null); this.levelUp.set(null); }
+  reset() { this.profile.set(null); this.wallet.set(null); this.levelUp.set(null); }
 }

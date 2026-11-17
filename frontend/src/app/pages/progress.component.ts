@@ -9,7 +9,7 @@ import { IconComponent } from '../shared/icon.component';
 import { RankInsigniaComponent } from '../shared/rank-insignia.component';
 
 const SHORT = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' });
-const KIND_ICON: Record<XpKind, string> = { task: 'check', habit: 'flame', focus: 'target', review: 'calendar' };
+const KIND_ICON: Record<XpKind, string> = { task: 'check', habit: 'flame', focus: 'target', review: 'calendar', mission: 'flag' };
 
 @Component({
   selector: 'app-progress',
@@ -68,6 +68,7 @@ const KIND_ICON: Record<XpKind, string> = { task: 'check', habit: 'flame', focus
               <li><app-icon name="flame" /> <span><strong>Rutinas</strong>: 5, 10, 15 o 25 XP según la dificultad al completarlas, más 1 por cada día (o semana) de racha (hasta 10).</span></li>
               <li><app-icon name="target" /> <span><strong>Concentración</strong>: 1 XP por cada 5 minutos de bloque Pomodoro terminado.</span></li>
               <li><app-icon name="calendar" /> <span><strong>Revisión semanal</strong>: 30 XP al terminarla, una vez por semana.</span></li>
+              <li><app-icon name="flag" /> <span><strong>Misiones semanales</strong>: de 40 a 80 XP cada una, más monedas para tus recompensas.</span></li>
             </ul>
             <p class="muted small">Reabrir una tarea o desmarcar una rutina retira su experiencia. Cada nivel pide 100 XP más que el anterior.</p>
           </section>
