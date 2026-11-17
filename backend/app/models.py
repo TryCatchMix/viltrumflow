@@ -67,6 +67,9 @@ class User(TimestampMixin, Base):
     # Fin de la fase de Pomodoro en curso: el servidor avisa por push aunque la app esté cerrada
     pomodoro_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
     pomodoro_phase: Mapped[Optional[str]] = mapped_column(String(10))
+    # Protectores de racha disponibles y último día ya revisado para gastarlos
+    streak_freezes: Mapped[int] = mapped_column(Integer, default=0)
+    freezes_checked_on: Mapped[Optional[date]] = mapped_column(Date)
 
     projects: Mapped[List["Project"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     tasks: Mapped[List["Task"]] = relationship(
@@ -289,6 +292,63 @@ class HabitCheck(Base):
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     habit: Mapped[Habit] = relationship(back_populates="checks")
+
+
+class HabitFreeze(Base):
+    """Día fallado de una rutina que un protector de racha salvó: no rompe la racha (tampoco la alarga)."""
+
+    __tablename__ = "habit_freezes"
+    __table_args__ = (UniqueConstraint("habit_id", "day", name="uq_habit_freeze_day"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    habit_id: Mapped[int] = mapped_column(ForeignKey("habits.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class WeeklyMission(Base):
+    """Misión de una semana. El progreso se calcula con lo hecho esa semana; la recompensa se reclama una vez."""
+
+    __tablename__ = "weekly_missions"
+    __table_args__ = (UniqueConstraint("user_id", "week_start", "key", name="uq_mission_user_week_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    week_start: Mapped[date] = mapped_column(Date)
+    key: Mapped[str] = mapped_column(String(30))
+    target: Mapped[int] = mapped_column(Integer)
+    reward_xp: Mapped[int] = mapped_column(Integer)
+    reward_coins: Mapped[int] = mapped_column(Integer)
+    claimed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+
+class CoinEntry(Base):
+    """Movimiento de monedas aparte de las que da la experiencia: premios de misiones (+) y compras (−)."""
+
+    __tablename__ = "coin_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    amount: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(20))  # mission | chest | reward | freeze
+    ref: Mapped[str] = mapped_column(String(60), default="")
+    detail: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class Reward(Base):
+    """Premio que el usuario se pone a sí mismo y canjea con monedas."""
+
+    __tablename__ = "rewards"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(120))
+    cost: Mapped[int] = mapped_column(Integer)
+    emoji: Mapped[str] = mapped_column(String(16), default="")
+    repeatable: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class XpEvent(Base):
