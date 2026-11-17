@@ -2,6 +2,7 @@ import DOMPurify from 'dompurify';
 import { Marked } from 'marked';
 
 /** Mismas reglas que el backend (services/markdown.py) para que enlaces, etiquetas y casillas coincidan. */
+const EMBED = /^!\[\[([^\[\]|#\n]+)(#[^\[\]|\n]*)?(?:\|[^\[\]\n]*)?\]\]/;
 const WIKILINK = /^\[\[([^\[\]|#\n]+)(#[^\[\]|\n]*)?(?:\|([^\[\]\n]*))?\]\]/;
 const TAG = /^#([A-Za-zÀ-ÿ_][\w/\-À-ÿ]*)/;
 export const CHECKBOX = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\]\s+)(.*)$/;
@@ -19,9 +20,21 @@ marked.use({
         const m = WIKILINK.exec(src);
         if (!m) return undefined;
         const title = m[1].trim().replace(/\s+/g, ' ');
-        return { type: 'wikilink', raw: m[0], title, text: (m[3] ?? '').trim() || title + (m[2] ?? '') };
+        const section = (m[2] ?? '').slice(1).trim();
+        return { type: 'wikilink', raw: m[0], title, section, text: (m[3] ?? '').trim() || (section ? `${title} › ${section}` : title) };
       },
-      renderer: (t: any) => `<a class="wikilink" data-title="${esc(t.title)}">${esc(t.text)}</a>`,
+      renderer: (t: any) => `<a class="wikilink" data-title="${esc(t.title)}"${t.section ? ` data-section="${esc(t.section)}"` : ''}>${esc(t.text)}</a>`,
+    },
+    {
+      // ![[Nota]] o ![[Nota#Sección]]: incrusta el contenido de otra nota (lo rellena la vista)
+      name: 'embed', level: 'inline',
+      start: (src: string) => { const i = src.indexOf('![['); return i < 0 ? undefined : i; },
+      tokenizer(src: string) {
+        const m = EMBED.exec(src);
+        if (!m || /\.(png|jpe?g|gif|webp|svg|pdf)$/i.test(m[1].trim())) return undefined;  // un fichero, no una nota
+        return { type: 'embed', raw: m[0], title: m[1].trim().replace(/\s+/g, ' '), section: (m[2] ?? '').slice(1).trim() };
+      },
+      renderer: (t: any) => `<span class="embed" data-title="${esc(t.title)}"${t.section ? ` data-section="${esc(t.section)}"` : ''}>${esc(t.title)}${t.section ? ' › ' + esc(t.section) : ''}</span>`,
     },
     {
       name: 'hashtag', level: 'inline',
@@ -60,6 +73,15 @@ export function toggleCheckboxLine(src: string, line: number, checked: boolean):
   const lines = src.split('\n');
   lines[line] = lines[line].replace(CHECKBOX, (_m, a, _b, c, d) => `${a}${checked ? 'x' : ' '}${c}${d}`);
   return lines.join('\n');
+}
+
+/** Texto de una sección: desde su encabezado hasta el siguiente del mismo nivel o superior. */
+export function sectionOf(src: string, name: string): string | null {
+  const hs = headings(src), want = name.trim().toLowerCase();
+  const i = hs.findIndex(h => h.text.trim().toLowerCase() === want);
+  if (i < 0) return null;
+  const end = hs.slice(i + 1).find(h => h.level <= hs[i].level);
+  return src.split('\n').slice(hs[i].line, end ? end.line : undefined).join('\n');
 }
 
 export interface Heading { level: number; text: string; line: number; }
@@ -103,6 +125,14 @@ export function renderMarkdown(src: string, exists: (title: string) => boolean):
     if (!exists(a.dataset['title'] ?? '')) a.classList.add('missing');
     a.setAttribute('role', 'link');
     a.tabIndex = 0;
+  });
+  tpl.content.querySelectorAll<HTMLImageElement>('img').forEach(img => {
+    const src = img.getAttribute('src') ?? '';
+    img.loading = 'lazy';
+    if (!/^\/api\/v1\/attachments\/[0-9a-f]{32}$/.test(src)) return;
+    // Imagen adjunta (privada): la vista la descarga con la sesión; sin `src` el navegador no la pide por su cuenta
+    img.dataset['attachment'] = src;
+    img.removeAttribute('src');
   });
   tpl.content.querySelectorAll<HTMLAnchorElement>('a[href]').forEach(a => { a.target = '_blank'; a.rel = 'noopener noreferrer'; });
   return tpl.innerHTML;

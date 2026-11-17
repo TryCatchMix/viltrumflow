@@ -63,3 +63,96 @@ def test_checklist_and_daily(client, auth):
     d1 = client.post(f"{N}/daily", headers=auth, params={"day": "2026-05-01"}).json()
     d2 = client.post(f"{N}/daily", headers=auth, params={"day": "2026-05-01"}).json()
     assert d1["id"] == d2["id"] and d1["is_daily"] and d1["folder"] == "Diario" and d1["title"] == "2026-05-01"
+
+
+def test_convert_checkbox_into_task(client, auth):
+    n = client.post(N, headers=auth, json={"title": "Plan", "content": "Intro\n  - [ ] Llamar a Juan\n- [x] hecho\n```\n- [ ] código\n```"}).json()
+    r = client.post(f"{N}/{n['id']}/checklist/convert", headers=auth, json={"line": 1, "due_date": "2030-01-02T00:00:00Z", "tags": ["tel"]})
+    assert r.status_code == 201, r.text
+    t = r.json()
+    assert t["title"] == "Llamar a Juan" and t["note_id"] == n["id"] and t["note_title"] == "Plan" and t["due_date"].startswith("2030-01-02")
+    content = client.get(f"{N}/{n['id']}", headers=auth).json()["content"]
+    assert content.split("\n")[1] == "  - Llamar a Juan *(convertida en tarea)*"
+    # ya no aparece como casilla, y la tarea se lista por nota
+    assert [i["text"] for i in client.get(f"{N}/checklist", headers=auth).json() if i["note_id"] == n["id"]] == ["hecho"]
+    assert [x["id"] for x in client.get("/api/v1/tasks", headers=auth, params={"note_id": n["id"]}).json()] == [t["id"]]
+    # líneas que no son casillas (texto, o dentro de código)
+    for line in (0, 4, 99):
+        assert client.post(f"{N}/{n['id']}/checklist/convert", headers=auth, json={"line": line}).status_code == 409
+
+
+def test_version_history(client, auth):
+    from datetime import timedelta
+    from app.database import SessionLocal
+    from app.models import NoteVersion
+    n = client.post(N, headers=auth, json={"title": "Borrador", "content": "v1 [[Ideas]]"}).json()
+    V = f"{N}/{n['id']}/versions"
+
+    def age_versions():  # como si hubieran pasado más de 10 minutos desde la última versión
+        with SessionLocal() as db:
+            for v in db.query(NoteVersion).all():
+                v.created_at -= timedelta(minutes=11)
+            db.commit()
+
+    client.put(f"{N}/{n['id']}", headers=auth, json={"content": "v2"})
+    assert [v["preview"] for v in client.get(V, headers=auth).json()] == ["v1 [[Ideas]]"]
+    # el autoguardado no crea una versión por cada cambio
+    client.put(f"{N}/{n['id']}", headers=auth, json={"content": "v3"})
+    assert len(client.get(V, headers=auth).json()) == 1
+    age_versions()
+    client.put(f"{N}/{n['id']}", headers=auth, json={"content": "v4"})
+    versions = client.get(V, headers=auth).json()
+    assert [v["preview"] for v in versions] == ["v3", "v1 [[Ideas]]"]
+    client.put(f"{N}/{n['id']}", headers=auth, json={"is_pinned": True})  # sin cambio de contenido: no cuenta
+    assert len(client.get(V, headers=auth).json()) == 2
+
+    v1 = versions[-1]
+    assert client.get(f"{V}/{v1['id']}", headers=auth).json()["content"] == "v1 [[Ideas]]"
+    restored = client.post(f"{V}/{v1['id']}/restore", headers=auth).json()
+    assert restored["content"] == "v1 [[Ideas]]" and restored["outgoing"][0]["title"] == "Ideas"  # los enlaces vuelven
+    assert client.get(V, headers=auth).json()[0]["preview"] == "v4"  # lo que había antes de restaurar no se pierde
+    assert client.get(f"{V}/999999", headers=auth).status_code == 404
+
+
+def test_templates(client, auth):
+    tpl = client.post(N, headers=auth, json={"title": "Reunión", "folder": "Plantillas",
+                                             "content": "# {{title}}\nFecha: {{ fecha }} {{time}}\n## Asistentes\n- [ ] \n{{desconocida}}"}).json()
+    n = client.post(N, headers=auth, json={"title": "Kickoff web", "template_id": tpl["id"], "day": "2026-05-04", "time": "10:30"}).json()
+    assert n["content"] == "# Kickoff web\nFecha: 2026-05-04 10:30\n## Asistentes\n- [ ] \n{{desconocida}}"
+    assert client.post(N, headers=auth, json={"title": "x", "template_id": 999999}).status_code == 400
+
+    # la nota diaria usa la plantilla «Diario» si existe en la carpeta Plantillas
+    client.post(N, headers=auth, json={"title": "Diario", "folder": "Plantillas", "content": "# {{date}}\n## Gratitud\n"})
+    d = client.post(f"{N}/daily", headers=auth, params={"day": "2026-05-04"}).json()
+    assert d["content"] == "# 2026-05-04\n## Gratitud\n" and d["folder"] == "Diario"
+
+
+def test_unlinked_mentions(client, auth):
+    target = client.post(N, headers=auth, json={"title": "Proyecto Web"}).json()
+    a = client.post(N, headers=auth, json={"title": "Acta", "content": "# Acta\nHablamos del proyecto web y de `Proyecto Web` en código."}).json()
+    client.post(N, headers=auth, json={"title": "Ya enlazada", "content": "Ver [[Proyecto Web]] y Proyecto Web otra vez"})
+    client.post(N, headers=auth, json={"title": "Parcial", "content": "Subproyecto webmaster https://x.com/Proyecto Web"})
+    M = f"{N}/{target['id']}/mentions"
+    found = client.get(M, headers=auth).json()
+    assert [(m["title"], m["context"]) for m in found] == [("Acta", "Hablamos del proyecto web y de `Proyecto Web` en código.")]
+
+    r = client.post(f"{M}/{a['id']}/link", headers=auth)
+    assert r.status_code == 200 and [b["title"] for b in r.json()["backlinks"]] == ["Acta", "Ya enlazada"]
+    content = client.get(f"{N}/{a['id']}", headers=auth).json()["content"]
+    assert content == "# Acta\nHablamos del [[Proyecto Web|proyecto web]] y de `Proyecto Web` en código."  # conserva el texto original
+    assert client.get(M, headers=auth).json() == []
+    assert client.post(f"{M}/{a['id']}/link", headers=auth).status_code == 409
+    assert len(client.get(f"{N}/{a['id']}/versions", headers=auth).json()) == 1  # el cambio se puede deshacer
+
+
+def test_update_with_stale_base_is_rejected(client, auth):
+    """Un cambio escrito sobre una versión antigua (p. ej. sin conexión) no pisa lo que se guardó después."""
+    n = client.post(N, headers=auth, json={"title": "Compartida entre dispositivos", "content": "v1"}).json()
+    ok = client.put(f"{N}/{n['id']}", headers=auth, json={"content": "v2", "base_updated_at": n["updated_at"]})
+    assert ok.status_code == 200
+    stale = client.put(f"{N}/{n['id']}", headers=auth, json={"content": "local", "base_updated_at": n["updated_at"]})
+    assert stale.status_code == 409
+    assert client.get(f"{N}/{n['id']}", headers=auth).json()["content"] == "v2"
+    fresh = client.put(f"{N}/{n['id']}", headers=auth, json={"content": "v3", "base_updated_at": ok.json()["updated_at"]})
+    assert fresh.status_code == 200 and fresh.json()["content"] == "v3"
+    assert client.put(f"{N}/{n['id']}", headers=auth, json={"content": "sin base"}).status_code == 200  # sin base no se comprueba

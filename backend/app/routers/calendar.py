@@ -47,6 +47,7 @@ def status(user: User = Depends(get_current_user)):
     return schemas.CalendarStatus(
         configured=settings.google_configured, connected=bool(acct and settings.google_configured),
         email=acct.email if acct else None, auto_sync=acct.auto_sync if acct else True,
+        calendar_id=acct.calendar_id if acct else "primary",
     )
 
 
@@ -82,9 +83,35 @@ def callback(state: str = "", code: str = "", error: str = "", db: Session = Dep
 @router.put("/settings", response_model=schemas.CalendarStatus)
 def update_settings(data: schemas.CalendarSettings, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     acct = _account(user)
-    acct.auto_sync = data.auto_sync
+    if data.auto_sync is not None:
+        acct.auto_sync = data.auto_sync
+    if data.calendar_id and data.calendar_id != acct.calendar_id:
+        valid = {c["id"] for c in _guard(db, user, lambda: gcal.list_calendars(db, acct))}
+        if data.calendar_id != "primary" and data.calendar_id not in valid:
+            raise HTTPException(400, "Ese calendario no existe o no puedes escribir en él")
+        # Los eventos ya creados se retiran del calendario anterior; «Sincronizar ahora» los crea en el nuevo
+        tasks = db.query(Task).filter(Task.user_id == user.id, Task.google_event_id.isnot(None)).all()
+
+        def move():
+            for t in tasks:
+                try:
+                    gcal.delete_event(db, acct, t.google_event_id)
+                except gcal.GoogleAuthExpired:
+                    raise
+                except (gcal.GoogleError, httpx.HTTPError):
+                    pass  # si no se pudo borrar, queda en el calendario anterior
+                t.google_event_id = None
+
+        _guard(db, user, move)
+        acct.calendar_id, acct.last_pull_at = data.calendar_id, None
     db.commit()
     return status(user)
+
+
+@router.get("/calendars", response_model=List[schemas.CalendarInfo])
+def calendars(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    acct = _account(user)
+    return _guard(db, user, lambda: gcal.list_calendars(db, acct))
 
 
 @router.delete("/disconnect", status_code=204)
@@ -111,13 +138,18 @@ def events(
         end = end.replace(tzinfo=timezone.utc)
     if not timedelta(0) < end - start <= timedelta(days=100):
         raise HTTPException(400, "Rango de fechas no válido (máximo 100 días)")
-    return _guard(db, user, lambda: gcal.list_events(db, acct, start, end))
+    def run():
+        gcal.pull_changes(db, acct)  # primero, lo que se haya movido o renombrado en Google
+        return gcal.list_events(db, acct, start, end)
+
+    return _guard(db, user, run)
 
 
 @router.post("/sync", response_model=schemas.SyncResult)
 def sync(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Envía a Google Calendar todas las tareas con fecha (crea o actualiza sus eventos)."""
     acct = _account(user)
+    _guard(db, user, lambda: gcal.pull_changes(db, acct, force=True))  # antes de enviar: lo cambiado en Google manda
     tasks = db.query(Task).filter(
         Task.user_id == user.id, Task.parent_task_id.is_(None), Task.deleted_at.is_(None),
         Task.due_date.isnot(None), Task.status != Status.ARCHIVED,

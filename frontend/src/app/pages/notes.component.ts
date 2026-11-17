@@ -4,8 +4,10 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
 import { ApiService } from '../core/api.service';
+import { AttachmentService } from '../core/attachment.service';
 import { OfflineService } from '../core/offline.service';
-import { Note, NoteSummary, TagCount } from '../core/models';
+import { Mention, Note, NoteSummary, NoteVersion, TagCount, Task } from '../core/models';
+import { TaskDialogService } from '../shared/task-dialog.service';
 import { ToastService } from '../core/toast.service';
 import { isOffline, relativeTime, today } from '../core/util';
 import { EditorComponent } from '../shared/editor.component';
@@ -26,8 +28,19 @@ type Mode = 'edit' | 'split' | 'preview';
       <div class="row top">
         <input class="input" [ngModel]="query()" (ngModelChange)="onSearch($event)" placeholder="Buscar en notas…" aria-label="Buscar en notas" />
         <button class="btn icon" title="Nueva nota" (click)="create()"><app-icon name="plus" /></button>
+        <button class="btn icon" title="Nueva nota desde plantilla" [class.active]="tplOpen()" (click)="tplOpen.set(!tplOpen())"><app-icon name="template" /></button>
         <button class="btn icon" title="Nota diaria de hoy" (click)="daily()"><app-icon name="calendar" /></button>
       </div>
+      @if (tplOpen()) {
+        <div class="tpl">
+          @for (t of templates(); track t.id) {
+            <button class="out row" (click)="createFromTemplate(t)"><app-icon name="template" [size]="13" /><span class="truncate">{{ t.title }}</span></button>
+          } @empty {
+            <p class="muted">Las notas de la carpeta <strong>Plantillas</strong> sirven de modelo. Admiten <code>{{ '{' + '{title}' + '}' }}</code>, <code>{{ '{' + '{date}' + '}' }}</code> y <code>{{ '{' + '{time}' + '}' }}</code>.</p>
+            <button class="btn sm" (click)="seedTemplates()">Crear plantillas de ejemplo</button>
+          }
+        </div>
+      }
       @if (tag()) {
         <div class="row filter"><span class="chip tag">#{{ tag() }}</span><span class="muted">{{ visible().length }} notas</span><span class="spacer"></span>
           <button class="btn ghost icon sm" title="Quitar filtro" (click)="tag.set('')"><app-icon name="x" [size]="13" /></button></div>
@@ -52,6 +65,7 @@ type Mode = 'edit' | 'split' | 'preview';
                 <a class="item row" [class.nested]="f.name" [routerLink]="['/notes', n.id]" [class.active]="n.id === note()?.id" (click)="listOpen.set(false)">
                   @if (n.is_pinned) { <app-icon name="pin" [size]="12" /> }
                   <span class="truncate">{{ n.title }}</span>
+                  @if (n.pending) { <span class="chip" title="Creada sin conexión; se enviará al reconectar">pendiente</span> }
                 </a>
               }
             }
@@ -81,6 +95,9 @@ type Mode = 'edit' | 'split' | 'preview';
             <button class="btn ghost icon sm hide-narrow" [class.active]="mode() === 'split'" title="Dividido" (click)="setMode('split')"><app-icon name="split" /></button>
             <button class="btn ghost icon sm" [class.active]="mode() === 'preview'" title="Lectura" (click)="setMode('preview')"><app-icon name="eye" /></button>
           </div>
+          <input #image type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden (change)="pickImages(image)" />
+          <button class="btn ghost icon sm" title="Insertar imagen (también puedes pegarla o arrastrarla)" (click)="image.click()"><app-icon name="image" /></button>
+          @if (n.id > 0) { <button class="btn ghost icon sm" title="Historial de versiones" (click)="openHistory()"><app-icon name="history" /></button> }
           <button class="btn ghost icon sm" [class.active]="n.is_pinned" [title]="n.is_pinned ? 'Desfijar' : 'Fijar'" (click)="pin()"><app-icon name="pin" /></button>
           <button class="btn ghost icon sm hide-narrow" [class.active]="side()" title="Panel de enlaces" (click)="toggleSide()"><app-icon name="panel" /></button>
           <button class="btn ghost icon sm danger" title="Eliminar nota" (click)="remove()"><app-icon name="trash" /></button>
@@ -94,7 +111,7 @@ type Mode = 'edit' | 'split' | 'preview';
         </div>
         <div class="panes" [class]="mode()">
           @if (mode() !== 'preview') {
-            <app-editor class="pane" [doc]="content()" [titles]="titleList()" (changed)="onEdit($event)" (save)="flush()" />
+            <app-editor class="pane" [doc]="content()" [titles]="titleList()" [upload]="uploadImage" (changed)="onEdit($event)" (save)="flush()" />
           }
           @if (mode() !== 'edit') {
             <div class="pane read" #reader>
@@ -118,6 +135,22 @@ type Mode = 'edit' | 'split' | 'preview';
     <!-- Panel derecho -->
     @if (note(); as n) {
       <aside class="side">
+        @if (neighbors().length) {
+          <h4>Grafo local</h4>
+          <svg class="local" viewBox="0 0 240 190" role="img" [attr.aria-label]="'Notas conectadas con ' + n.title">
+            @for (p of neighbors(); track p.title) { <line x1="120" y1="95" [attr.x2]="p.x" [attr.y2]="p.y" /> }
+            @for (p of neighbors(); track p.title) {
+              <g class="node" [class.ghost]="!p.id" (click)="openLink(p.title)" tabindex="0" (keydown.enter)="openLink(p.title)" role="link">
+                <title>{{ p.title }}</title>
+                <circle class="hit" [attr.cx]="p.x" [attr.cy]="p.y" r="15" />
+                <circle [attr.cx]="p.x" [attr.cy]="p.y" r="5" />
+                <text [attr.x]="p.x" [attr.y]="p.y + (p.y < 95 ? -9 : 17)" text-anchor="middle">{{ p.label }}</text>
+              </g>
+            }
+            <circle class="center" cx="120" cy="95" r="7" />
+          </svg>
+        }
+
         <h4>Enlaces entrantes <span class="muted">{{ n.backlinks.length }}</span></h4>
         @for (b of n.backlinks; track b.id) {
           <a class="back" [routerLink]="['/notes', b.id]"><strong>{{ b.title }}</strong>@if (b.context) { <small>{{ b.context }}</small> }</a>
@@ -130,6 +163,26 @@ type Mode = 'edit' | 'split' | 'preview';
           </button>
         } @empty { <p class="muted">Sin enlaces. Escribe <code>[[</code> para crear uno.</p> }
 
+        @if (mentions().length) {
+          <h4>Menciones sin enlazar <span class="muted">{{ mentions().length }}</span></h4>
+          @for (m of mentions(); track m.note_id) {
+            <div class="back mention">
+              <div class="row"><a [routerLink]="['/notes', m.note_id]"><strong>{{ m.title }}</strong></a><span class="spacer"></span>
+                <button class="btn sm" [title]="'Convertir la mención en un enlace a ' + n.title" (click)="linkMention(m)"><app-icon name="link" [size]="12" /> Enlazar</button></div>
+              <small>{{ m.context }}</small>
+            </div>
+          }
+        }
+
+        @if (linked().length) {
+          <h4>Tareas de esta nota <span class="muted">{{ linked().length }}</span></h4>
+          @for (t of linked(); track t.id) {
+            <button class="out row" [class.done]="t.status === 'completed'" (click)="dialog.edit(t)">
+              <app-icon name="check" [size]="13" /><span class="truncate">{{ t.title }}</span>
+            </button>
+          }
+        }
+
         <h4>Esquema</h4>
         @for (h of outline(); track h.line) {
           <button class="out truncate" [style.padding-left.px]="6 + (h.level - 1) * 12" (click)="goTo(h.line, $index)">{{ h.text }}</button>
@@ -137,9 +190,48 @@ type Mode = 'edit' | 'split' | 'preview';
         <a class="btn sm graph-link" [routerLink]="['/graph']" [queryParams]="{ focus: n.id }"><app-icon name="graph" [size]="14" /> Ver en el grafo</a>
       </aside>
     }
-  </div>`,
+  </div>
+
+  @if (history(); as h) {
+    <div class="backdrop" (click)="history.set(null)">
+      <div class="modal hist" role="dialog" aria-label="Historial de versiones" (click)="$event.stopPropagation()">
+        <div class="row"><h2>Historial de «{{ note()?.title }}»</h2><span class="spacer"></span>
+          <button class="btn ghost icon" title="Cerrar" (click)="history.set(null)"><app-icon name="x" /></button></div>
+        @if (h.length) {
+          <div class="hgrid">
+            <ul>
+              @for (v of h; track v.id) {
+                <li><button [class.active]="selected()?.id === v.id" (click)="selectVersion(v)">
+                  <strong>{{ when(v.created_at) }}</strong><small class="muted truncate">{{ v.preview || '(vacía)' }}</small></button></li>
+              }
+            </ul>
+            <div class="hview">
+              @if (selected()?.content !== undefined) { <app-markdown [content]="selected()!.content!" [titles]="titleSet()" [embeds]="false" /> }
+            </div>
+          </div>
+          <div class="actions"><span class="muted small">Se guarda una versión como mucho cada 10 minutos, y las 50 más recientes.</span><span class="spacer"></span>
+            <button class="btn primary" [disabled]="!selected()" (click)="restoreVersion()"><app-icon name="undo" /> Restaurar esta versión</button></div>
+        } @else {
+          <p class="muted">Todavía no hay versiones anteriores. Aparecerán aquí a medida que edites la nota.</p>
+        }
+      </div>
+    </div>
+  }`,
   styles: [`
     :host { display: block; height: 100%; min-height: 0; }
+    .tpl { padding: 0 10px 8px; display: grid; gap: 4px; font-size: 13px; border-bottom: 1px solid var(--border); margin-bottom: 6px; p { padding-bottom: 4px; } }
+    .local { width: 100%; height: auto; line { stroke: var(--border); stroke-width: 1; } text { font-size: 9.5px; fill: var(--text-2); }
+      circle { fill: var(--text-2); } .center { fill: var(--accent); } circle.hit { fill: transparent !important; stroke: none !important; }
+      .node { cursor: pointer; &:hover circle, &:focus-visible circle { fill: var(--accent); } &:hover text { fill: var(--text); }
+        &.ghost circle { fill: none; stroke: var(--text-3); stroke-dasharray: 2 2; } } }
+    .mention { cursor: default; a { color: var(--text); } }
+    .hist { max-width: 860px; } .small { font-size: 12px; }
+    .hgrid { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 12px; height: min(56vh, 520px);
+      ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: grid; gap: 2px; align-content: start; }
+      button { width: 100%; display: grid; gap: 1px; text-align: left; background: none; border: none; padding: 7px 9px; border-radius: var(--radius-sm); font-size: 13px;
+        &:hover { background: var(--surface-2); } &.active { background: var(--accent-soft); } small { font-size: 12px; } } }
+    .hview { overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px 18px; background: var(--bg); }
+    @media (max-width: 700px) { .hgrid { grid-template-columns: minmax(0, 1fr); height: auto; ul { max-height: 160px; } .hview { max-height: 40vh; } } }
     .notes { display: grid; grid-template-columns: 250px minmax(0, 1fr) 260px; height: 100%; &.no-side { grid-template-columns: 250px minmax(0, 1fr); .side { display: none; } } }
     .tree { border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
     .top { padding: 10px; gap: 6px; } .filter { padding: 0 10px 8px; font-size: 12px; }
@@ -170,6 +262,7 @@ type Mode = 'edit' | 'split' | 'preview';
       h4 { margin-left: 4px; } p { padding: 0 4px; } }
     .back { display: grid; gap: 2px; padding: 7px 8px; border-radius: var(--radius-sm); color: var(--text); background: var(--surface-2); margin-bottom: 6px; &:hover { text-decoration: none; background: var(--surface-3); }
       small { color: var(--text-3); overflow-wrap: anywhere; } }
+    .out.done { text-decoration: line-through; opacity: .6; }
     .out { display: flex; width: 100%; background: none; border: none; text-align: left; padding: 4px 6px; border-radius: var(--radius-sm); color: var(--text-2); gap: 6px; &:hover { background: var(--surface-2); color: var(--text); } &.ghost { opacity: .6; } }
     .graph-link { margin: 18px 4px 0; }
     .only-narrow { display: none; }
@@ -188,6 +281,20 @@ export class NotesComponent implements OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private offline = inject(OfflineService);
+  private attachments = inject(AttachmentService);
+
+  /** Sube una imagen a la nota abierta; la usa el editor al pegar o arrastrar. */
+  uploadImage = async (file: File): Promise<string> => {
+    if (!this.attachments.isImage(file)) { this.toast.error('Solo se admiten imágenes PNG, JPEG, GIF o WebP'); throw new Error('tipo'); }
+    try { return await this.attachments.upload(file, this.note()?.id); }
+    catch (e) { this.toast.error(e, 'No se pudo subir la imagen'); throw e; }
+  };
+  pickImages(input: HTMLInputElement) {
+    const files = Array.from(input.files ?? []);
+    input.value = '';
+    if (this.mode() === 'preview') this.setMode('edit');
+    setTimeout(() => files.forEach(f => this.editor?.insertImage(f)), 50);
+  }
   @ViewChild(EditorComponent) editor?: EditorComponent;
   @ViewChild('reader') reader?: { nativeElement: HTMLElement };
   rel = relativeTime;
@@ -195,6 +302,27 @@ export class NotesComponent implements OnDestroy {
   list = signal<NoteSummary[]>([]);
   tags = signal<TagCount[]>([]);
   results = signal<NoteSummary[]>([]);
+  linked = signal<Task[]>([]);
+  mentions = signal<Mention[]>([]);
+  tplOpen = signal(false);
+  history = signal<NoteVersion[] | null>(null);
+  selected = signal<NoteVersion | null>(null);
+  private pendingSection = '';
+  when = (iso: string) => new Date(iso).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' });
+  templates = computed(() => this.list().filter(n => n.folder.split('/')[0].toLowerCase() === 'plantillas' && !n.pending));
+  /** Notas conectadas con la abierta, repartidas en círculo alrededor de ella. */
+  neighbors = computed(() => {
+    const n = this.note();
+    if (!n) return [];
+    const map = new Map<string, { id: number | null; title: string }>();
+    for (const r of [...n.backlinks, ...n.outgoing]) if (r.title.toLowerCase() !== n.title.toLowerCase()) map.set(r.title.toLowerCase(), { id: r.id, title: r.title });
+    const all = [...map.values()].slice(0, 12);
+    return all.map((r, i) => {
+      const a = (2 * Math.PI * i) / all.length - Math.PI / 2;
+      return { ...r, x: 120 + Math.cos(a) * 82, y: 95 + Math.sin(a) * 62, label: r.title.length > 16 ? r.title.slice(0, 15) + '…' : r.title };
+    });
+  });
+  dialog = inject(TaskDialogService);
   note = signal<Note | null>(null);
   content = signal('');
   loading = signal(true);
@@ -231,10 +359,15 @@ export class NotesComponent implements OnDestroy {
 
   constructor() {
     this.loadList(true);
+    this.offline.noteSynced.pipe(takeUntilDestroyed()).subscribe(({ temp, real }) => {
+      this.loadList();
+      if (this.note()?.id === temp) this.router.navigate(['/notes', real], { replaceUrl: true });
+    });
+    this.api.tasksChanged.pipe(takeUntilDestroyed()).subscribe(() => { const n = this.note(); if (n) this.loadLinked(n.id); });
     addEventListener('online', this.onOnline);
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe(p => {
       const id = Number(p.get('id'));
-      if (id) this.open(id);
+      if (id) this.open(id);  // los ids negativos son notas creadas sin conexión
     });
     this.search$.pipe(debounceTime(200), distinctUntilChanged(), switchMap(q => (q ? this.api.notes({ q }) : of([]))), takeUntilDestroyed())
       .subscribe(r => this.results.set(r));
@@ -242,7 +375,7 @@ export class NotesComponent implements OnDestroy {
 
   ngOnDestroy() { this.flush(); this.offline.activeId = null; removeEventListener('online', this.onOnline); }
   /** Al volver la red, envía lo que quedó pendiente de la nota abierta. */
-  private onOnline = () => { const n = this.note(); if (n && this.offline.get(n.id)) { this.dirty = true; this.flush(); } };
+  private onOnline = () => { const n = this.note(); if (n && n.id > 0) this.reconcile(n.id); };
   @HostListener('window:beforeunload') onUnload() { this.flush(); }
 
   private loadList(initial = false) {
@@ -269,11 +402,13 @@ export class NotesComponent implements OnDestroy {
         this.content.set(n.content);
         this.status.set('');
         this.loading.set(false);
+        if (this.pendingSection) { const s = this.pendingSection; this.pendingSection = ''; setTimeout(() => this.scrollToSection(s), 150); }
         // Texto escrito sin conexión y aún no enviado: tiene prioridad sobre lo que devuelve el servidor
         const draft = this.offline.get(n.id);
         if (draft && draft.content !== n.content) {
-          if (n.updated_at === draft.base || !navigator.onLine) { this.content.set(draft.content); this.dirty = true; this.flush(); }
-          else { this.offline.activeId = null; this.offline.sync().then(() => { this.offline.activeId = n.id; this.loadList(); }); }  // cambió en otro sitio: copia aparte
+          // Se muestra lo escrito aquí; al enviarlo se comprueba si la nota cambió en otro sitio (y entonces va a una copia)
+          this.content.set(draft.content);
+          this.reconcile(n.id);
         } else if (draft) this.offline.remove(n.id);
         if (this.route.snapshot.queryParamMap.get('edit')) {
           if (this.mode() === 'preview') this.mode.set('edit');
@@ -298,7 +433,14 @@ export class NotesComponent implements OnDestroy {
     });
   }
 
-  private apply(n: Note) { this.offline.activeId = n.id; this.note.set(n); this.title = n.title; this.folder = n.folder; }
+  private loadLinked(id: number) {
+    if (id > 0) this.api.tasks({ note_id: id, include_archived: true }).subscribe({ next: t => this.linked.set(t), error: () => this.linked.set([]) });
+  }
+  private loadMentions(id: number) {
+    this.mentions.set([]);
+    if (id > 0) this.api.mentions(id).subscribe({ next: m => { if (this.note()?.id === id) this.mentions.set(m); }, error: () => {} });
+  }
+  private apply(n: Note) { if (this.note()?.id !== n.id) { this.linked.set([]); this.loadLinked(n.id); this.loadMentions(n.id); } this.offline.activeId = n.id; this.note.set(n); this.title = n.title; this.folder = n.folder; }
 
   // ---- Edición y guardado automático ----
   onEdit(text: string) {
@@ -316,6 +458,16 @@ export class NotesComponent implements OnDestroy {
     if (!n || !this.dirty) return;
     this.dirty = false;
     const sent = this.content();
+    if (n.id > 0 && this.offline.get(n.id)) {
+      // Hay texto escrito sin conexión: antes de enviarlo hay que comprobar que la nota no cambió en otro sitio
+      this.offline.save(n.id, n.title, sent, n.updated_at);
+      this.reconcile(n.id);
+      return;
+    }
+    this.send(n, sent);
+  }
+
+  private send(n: Note, sent: string) {
     this.status.set('Guardando…');
     this.api.updateNote(n.id, { content: sent }).subscribe({
       next: saved => {
@@ -334,6 +486,45 @@ export class NotesComponent implements OnDestroy {
         }
         if (this.note()?.id === n.id) { this.dirty = true; this.status.set('Error al guardar'); }
         this.toast.error(e, 'No se pudo guardar la nota');
+      },
+    });
+  }
+
+  /**
+   * Envía el borrador escrito sin conexión de la nota abierta, pero solo si el servidor sigue teniendo la
+   * versión sobre la que se escribió. Si cambió en otro dispositivo, lo local se guarda como copia aparte
+   * y el editor pasa a mostrar la versión del servidor.
+   */
+  private reconcile(id: number) {
+    const draft = this.offline.get(id);
+    if (!draft) return;
+    if (!navigator.onLine) { if (this.note()?.id === id) this.status.set('Sin conexión · guardado en este dispositivo'); return; }
+    this.status.set('Guardando…');
+    this.api.updateNote(id, { content: draft.content, base_updated_at: draft.base }).subscribe({
+      next: saved => {
+        this.offline.remove(id);
+        if (this.note()?.id !== id) { this.loadList(); return; }
+        this.apply({ ...saved, content: this.content() });
+        if (this.content() !== draft.content) { this.dirty = true; this.flush(); }  // se siguió escribiendo mientras tanto
+        else if (!this.dirty) this.status.set('Guardado');
+        this.loadList();
+      },
+      error: e => {
+        if (isOffline(e)) { if (this.note()?.id === id) this.status.set('Sin conexión · guardado en este dispositivo'); return; }
+        if (e.status !== 409 && e.status !== 404) { this.status.set('Error al guardar'); this.toast.error(e, 'No se pudo guardar la nota'); return; }
+        // Cambió en otro dispositivo: la sincronización general guarda lo local como copia…
+        const wasActive = this.offline.activeId;
+        this.offline.activeId = null;
+        this.offline.sync().then(() => {
+          this.offline.activeId = wasActive === id ? this.note()?.id ?? null : wasActive;
+          this.loadList();
+          if (this.note()?.id !== id) return;
+          // …y el editor pasa a mostrar la versión del servidor
+          this.api.noteFresh(id).subscribe({
+            next: server => { if (this.note()?.id === id && !this.dirty) { this.apply(server); this.content.set(server.content); this.status.set(''); } },
+            error: () => { this.note.set(null); this.missing.set(true); },
+          });
+        });
       },
     });
   }
@@ -384,6 +575,14 @@ export class NotesComponent implements OnDestroy {
     const base = title ?? 'Sin título';
     let name = base, i = 1;
     while (this.titleSet().has(name.toLowerCase())) name = `${base} ${++i}`;
+    if (!navigator.onLine) {
+      // Sin red: la nota vive en el dispositivo hasta que se pueda enviar
+      const local = this.api.createLocalNote(name, title ? '' : this.note()?.folder ?? '');
+      this.listOpen.set(false);
+      this.loadList();
+      this.router.navigate(['/notes', local.id], { queryParams: { edit: 1 } });
+      return;
+    }
     this.api.createNote({ title: name, content: '', folder: title ? '' : this.note()?.folder ?? '' }).subscribe({
       next: n => { this.listOpen.set(false); this.loadList(); this.router.navigate(['/notes', n.id], { queryParams: { edit: 1 } }); },
       error: e => this.toast.error(e, 'No se pudo crear la nota'),
@@ -393,10 +592,78 @@ export class NotesComponent implements OnDestroy {
     this.api.dailyNote(today()).subscribe({ next: n => { this.listOpen.set(false); this.loadList(); this.router.navigate(['/notes', n.id]); }, error: e => this.toast.error(e) });
   }
   /** Abre la nota enlazada; si no existe, la crea (como en Obsidian). */
-  openLink(title: string) {
+  openLink(target: string) {
+    const [title, section = ''] = target.split('#');
     const found = this.list().find(n => n.title.toLowerCase() === title.toLowerCase());
-    if (found) this.router.navigate(['/notes', found.id]);
-    else { this.flush(); this.create(title); }
+    if (!found) { this.flush(); this.create(title); return; }
+    if (found.id === this.note()?.id) { this.scrollToSection(section); return; }  // enlace a una sección de esta misma nota
+    this.pendingSection = section;
+    this.router.navigate(['/notes', found.id]);
+  }
+  /** Lleva la vista al encabezado con ese texto (enlaces [[Nota#Sección]]). */
+  private scrollToSection(section: string) {
+    const i = section ? this.outline().findIndex(h => h.text.trim().toLowerCase() === section.trim().toLowerCase()) : -1;
+    if (i >= 0) this.goTo(this.outline()[i].line, i);
+  }
+
+  // ---- Plantillas ----
+  createFromTemplate(t: NoteSummary) {
+    const now = new Date(), day = today();
+    const base = `${t.title} ${day}`;
+    let name = base, i = 1;
+    while (this.titleSet().has(name.toLowerCase())) name = `${base} (${++i})`;
+    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    this.api.createNote({ title: name, template_id: t.id, day, time }).subscribe({
+      next: n => { this.tplOpen.set(false); this.listOpen.set(false); this.loadList(); this.router.navigate(['/notes', n.id], { queryParams: { edit: 1 } }); },
+      error: e => this.toast.error(e, 'No se pudo crear la nota desde la plantilla'),
+    });
+  }
+  seedTemplates() {
+    const samples = [
+      { title: 'Reunión', content: '# {{title}}\n\n**Fecha:** {{date}} {{time}}\n**Asistentes:** \n\n## Orden del día\n- \n\n## Acuerdos\n- \n\n## Tareas\n- [ ] \n' },
+      { title: 'Diario', content: '# {{date}}\n\n## Lo más importante de hoy\n- [ ] \n\n## Notas\n\n## Cómo ha ido\n' },
+      { title: 'Proyecto', content: '# {{title}}\n\n## Objetivo\n\n## Hitos\n- [ ] \n\n## Enlaces\n- \n\n#proyecto\n' },
+    ];
+    let left = samples.length;
+    for (const s of samples) {
+      // Un 409 solo indica que ya existe una nota con ese nombre: se deja como está
+      this.api.createNote({ ...s, folder: 'Plantillas' }).subscribe({ next: () => { if (!--left) this.loadList(); }, error: () => { if (!--left) this.loadList(); } });
+    }
+  }
+
+  // ---- Historial ----
+  openHistory() {
+    const n = this.note();
+    if (!n) return;
+    this.flush();
+    this.selected.set(null);
+    this.history.set([]);
+    this.api.versions(n.id).subscribe({
+      next: v => { this.history.set(v); if (v.length) this.selectVersion(v[0]); },
+      error: e => { this.history.set(null); this.toast.error(e, 'No se pudo cargar el historial'); },
+    });
+  }
+  selectVersion(v: NoteVersion) {
+    this.selected.set(v);
+    this.api.version(this.note()!.id, v.id).subscribe({ next: full => { if (this.selected()?.id === v.id) this.selected.set(full); }, error: e => this.toast.error(e) });
+  }
+  restoreVersion() {
+    const n = this.note(), v = this.selected();
+    if (!n || !v) return;
+    clearTimeout(this.timer);
+    this.dirty = false;
+    this.api.restoreVersion(n.id, v.id).subscribe({
+      next: saved => { this.apply(saved); this.content.set(saved.content); this.status.set('Guardado'); this.history.set(null); this.loadList(); this.toast.success('Versión restaurada. La anterior sigue en el historial'); },
+      error: e => this.toast.error(e, 'No se pudo restaurar'),
+    });
+  }
+
+  linkMention(m: Mention) {
+    const n = this.note()!;
+    this.api.linkMention(n.id, m.note_id).subscribe({
+      next: saved => { this.apply({ ...saved, content: this.content() }); this.mentions.update(l => l.filter(x => x.note_id !== m.note_id)); },
+      error: e => { this.toast.error(e); this.loadMentions(n.id); },
+    });
   }
   goTo(line: number, index: number) {
     if (this.mode() === 'edit') { this.editor?.scrollToLine(line); return; }

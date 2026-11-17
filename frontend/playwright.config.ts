@@ -26,12 +26,13 @@ export default defineConfig({
     {
       // Base SQLite en fichero, recreada en cada ejecución (la de memoria comparte una sola conexión
       // entre peticiones simultáneas y da errores intermitentes)
-      command: `rm -f e2e-test.db && ${PYTHON} -m uvicorn app.main:app --port 8010`,
+      command: `rm -rf e2e-test.db e2e-uploads && ${PYTHON} -m uvicorn app.main:app --port 8010`,
       cwd: '../backend',
       url: 'http://localhost:8010/health',
       reuseExistingServer: false,
       env: {
         DATABASE_URL: 'sqlite:///./e2e-test.db',
+        UPLOAD_DIR: './e2e-uploads',
         SECRET_KEY: 'e2e-secret-key-e2e-secret-key-0123456789',
         ENVIRONMENT: 'test',
         SCHEDULER_ENABLED: 'false',

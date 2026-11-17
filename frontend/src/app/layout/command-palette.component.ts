@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
 import { ApiService } from '../core/api.service';
 import { STATUS_LABEL, Status } from '../core/models';
+import { quickToTask } from '../core/quick-task';
 import { ThemeService } from '../core/theme.service';
 import { ToastService } from '../core/toast.service';
 import { today } from '../core/util';
@@ -69,6 +70,9 @@ export class CommandPaletteComponent {
     { icon: 'calendar', label: 'Abrir nota diaria de hoy', run: () => this.daily() },
     { icon: 'plus', label: 'Nueva tarea', run: () => this.dialog.create() },
     { icon: 'home', label: 'Ir a Inicio', run: () => this.router.navigate(['/dashboard']) },
+    { icon: 'sun', label: 'Ir a Hoy (rutinas y tareas del día)', run: () => this.router.navigate(['/today']) },
+    { icon: 'target', label: 'Ir a Enfoque (Pomodoro)', run: () => this.router.navigate(['/focus']) },
+    { icon: 'shield', label: 'Ir a Progreso (nivel y rangos)', run: () => this.router.navigate(['/progress']) },
     { icon: 'check', label: 'Ir a Tareas', run: () => this.router.navigate(['/tasks']) },
     { icon: 'board', label: 'Ir a Tablero', run: () => this.router.navigate(['/kanban']) },
     { icon: 'note', label: 'Ir a Notas', run: () => this.router.navigate(['/notes']) },
@@ -99,7 +103,7 @@ export class CommandPaletteComponent {
         const exact = results.some(r => r.kind === 'note' && r.title.toLowerCase() === q.toLowerCase());
         const create: Item[] = exact ? [] : [
           { icon: 'plus', label: `Crear nota «${q}»`, run: () => this.newNote(q) },
-          { icon: 'plus', label: `Crear tarea «${q}»`, run: () => this.dialog.create({ title: q }) },
+          { icon: 'plus', label: `Crear tarea «${q}»`, hint: 'admite «mañana 10:00 #etiqueta !alta»', run: () => this.quickTask(q) },
         ];
         this.set([...found, ...cmds, ...create]);
       },
@@ -132,6 +136,16 @@ export class CommandPaletteComponent {
 
   private set(items: Item[]) { this.items.set(items); this.active.set(0); }
   private scroll() { setTimeout(() => document.querySelector('.palette li.active')?.scrollIntoView({ block: 'nearest' })); }
+
+  /** Crea la tarea directamente, interpretando fecha, etiquetas y prioridad del texto. */
+  private quickTask(text: string) {
+    this.api.projects().subscribe({
+      next: projects => this.api.createTask(quickToTask(text, projects).input).subscribe({
+        next: t => this.toast.success(`Tarea creada: ${t.title}`), error: e => this.toast.error(e, 'No se pudo crear la tarea'),
+      }),
+      error: e => this.toast.error(e),
+    });
+  }
 
   private newNote(title: string) {
     const t = title || `Sin título ${new Date().toLocaleString('es', { dateStyle: 'short', timeStyle: 'medium' }).replace(/[\/,]/g, '-')}`;

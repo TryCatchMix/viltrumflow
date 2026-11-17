@@ -58,6 +58,8 @@ export class AuthService {
     this.user.set(null);
     // En un dispositivo compartido no deben quedar datos del usuario anterior
     localStorage.removeItem('vf-note-drafts');
+    localStorage.removeItem('vf-outbox');
+    localStorage.removeItem('vf-pomodoro');
     if ('caches' in window) caches.keys().then(keys => keys.filter(k => k.includes(':data:')).forEach(k => caches.delete(k))).catch(() => {});
     if (redirect) this.router.navigate(['/login']);
   }

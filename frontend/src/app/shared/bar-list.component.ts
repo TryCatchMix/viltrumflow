@@ -10,7 +10,7 @@ export interface Bar { label: string; value: number; total?: number; color?: str
   template: `
   @for (b of bars; track b.label) {
     <div class="bar" [title]="b.hint ?? (b.total !== undefined ? b.value + ' de ' + b.total : b.label + ': ' + b.value)">
-      <span class="label truncate">@if (b.color) { <i [style.background]="b.color"></i> }{{ b.label }}</span>
+      <span class="label truncate">@if (b.color && dots) { <i [style.background]="b.color"></i> }{{ b.label }}</span>
       <span class="track"><span class="fill" [style.width.%]="pct(b)" [style.background]="progress ? (b.color || 'var(--series-1)') : 'var(--series-1)'"></span></span>
       <span class="value">{{ b.total !== undefined ? b.value + '/' + b.total : b.value }}</span>
     </div>
@@ -29,6 +29,8 @@ export class BarListComponent {
   @Input() bars: Bar[] = [];
   @Input() empty = 'Sin datos';
   @Input() progress = false;
+  /** Punto de color junto a la etiqueta (identifica al proyecto); desactívalo si el color es un estado. */
+  @Input() dots = true;
   private get max() { return Math.max(1, ...this.bars.map(b => b.value)); }
-  pct(b: Bar) { return b.total !== undefined ? (b.total ? (100 * b.value) / b.total : 0) : (100 * b.value) / this.max; }
+  pct(b: Bar) { return Math.min(100, b.total !== undefined ? (b.total ? (100 * b.value) / b.total : 0) : (100 * b.value) / this.max); }
 }

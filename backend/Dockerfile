@@ -10,7 +10,9 @@ COPY alembic.ini .
 COPY migrations ./migrations
 COPY app ./app
 
-RUN useradd --create-home --uid 1000 app
+# Carpeta de imágenes adjuntas (se monta un volumen encima); debe pertenecer al usuario sin privilegios
+ENV UPLOAD_DIR=/data/uploads
+RUN useradd --create-home --uid 1000 app && mkdir -p /data/uploads && chown -R app:app /data
 USER app
 
 EXPOSE 8000

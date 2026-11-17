@@ -10,16 +10,27 @@ notas Markdown con `[[enlaces]]` al estilo Obsidian, vista de grafo y panel con 
 | Área | Qué incluye |
 | --- | --- |
 | **Notas** | Editor Markdown con resaltado, modos edición / dividido / lectura, autoguardado, carpetas, notas fijadas, nota diaria |
+| **Imágenes** | Pega, arrastra o elige una imagen en el editor (PNG, JPEG, GIF, WebP; 5 MB); son privadas y viajan en la exportación e importación |
 | **Enlaces** | `[[Nota]]`, `[[Nota\|alias]]`, autocompletado al escribir `[[`, enlaces entrantes con contexto, creación de la nota al abrir un enlace sin resolver, renombrar una nota actualiza los enlaces que apuntan a ella |
+| **Secciones e incrustaciones** | `[[Nota#Sección]]` abre la nota en ese encabezado; `![[Nota]]` y `![[Nota#Sección]]` muestran su contenido dentro de otra |
+| **Menciones sin enlazar** | Detecta las notas que nombran a la actual sin enlazarla y las convierte en enlace con un clic |
+| **Plantillas** | Las notas de la carpeta `Plantillas` sirven de modelo (`{{title}}`, `{{date}}`, `{{time}}`); la plantilla «Diario» se usa para la nota diaria |
+| **Historial** | Versiones anteriores de cada nota, con vista previa y restauración |
 | **Etiquetas** | `#etiqueta` y anidadas `#proyecto/web`, filtro por etiqueta |
-| **Grafo** | Notas, enlaces, notas sin crear y (opcional) etiquetas; zoom, arrastre, resaltado de vecinos y búsqueda |
+| **Grafo** | Notas, enlaces, notas sin crear y (opcional) etiquetas; zoom, arrastre, resaltado de vecinos y búsqueda. Cada nota muestra además su grafo local |
+| **Captura rápida** | «Llamar a Juan mañana a las 10 #trabajo !alta @web cada semana» rellena fecha, hora, etiquetas, prioridad, proyecto y repetición |
+| **Hoy** | Lista diaria al estilo de una checklist: rutinas que se repiten los días que elijas y las tareas del día, con anillo de avance |
+| **Estadísticas de rutinas** | Qué se cumple y qué no día a día, porcentaje, rachas, a qué hora se marcan, puntualidad frente a la hora prevista y cumplimiento por día de la semana |
+| **Pomodoro** | Reloj configurable (concentración, descansos, bloques por serie, inicio automático, sonido y aviso); cada bloque suma tiempo a la tarea elegida |
+| **Progreso** | Experiencia por tareas, rutinas y concentración; niveles, diez rangos del Imperio, logros y gráficos |
 | **Tareas** | Alta rápida, subtareas, comentarios, prioridad, etiquetas, fecha con o sin hora, filtros y agrupación |
 | **Recurrentes** | Cada día, días laborables, cada semana, cada 2 semanas, cada mes o cada año: al completar una tarea se crea la siguiente |
 | **Recordatorios** | Aviso en el navegador antes del vencimiento y, con SMTP configurado, por email; resumen diario por la mañana |
 | **Importar / exportar** | Todas las notas como `.zip` de archivos `.md` (se abre como vault en Obsidian) e importación de un vault o de `.md` sueltos |
-| **Casillas de notas** | Los `- [ ]` escritos en cualquier nota aparecen en *Tareas → Casillas de notas* y se pueden marcar desde ahí |
+| **Casillas de notas** | Los `- [ ]` escritos en cualquier nota aparecen en *Tareas → Casillas de notas*, se marcan desde ahí y se pueden convertir en tareas enlazadas a la nota |
 | **Tablero** | Kanban con arrastrar y soltar; el orden se guarda |
-| **Calendario** | Vista mensual con tareas y eventos de Google Calendar |
+| **Calendario** | Vistas de mes y semana con tareas y eventos de Google Calendar; arrastra una tarea a otro día para cambiar su fecha |
+| **Tiempo** | Cronómetro por tarea, corrección manual y comparación con la estimación en el panel |
 | **Panel** | Actividad diaria, carga pendiente, reparto por estado / prioridad y avance por proyecto |
 | **Proyectos compartidos** | Invita a otros usuarios como editores o con solo lectura, asigna tareas a un responsable y recibe aviso cuando te asignan una |
 | **Papelera** | Las notas y tareas eliminadas se pueden restaurar durante 30 días |
@@ -89,10 +100,47 @@ Qué hace:
 - Muestra en el calendario los eventos de tu calendario principal (solo lectura).
 - Crea un evento por cada tarea con fecha y lo mantiene al día: cambios de título, fecha u hora,
   marca `✓` al completarla y lo elimina si borras la tarea o le quitas la fecha.
+- **En ambos sentidos**: si mueves de día u hora o renombras en Google el evento de una tarea, la tarea se
+  actualiza (cada 10 minutos, o al momento con «Sincronizar ahora»). Si borras el evento, la tarea se conserva y
+  deja de estar enlazada.
 - «Sincronizar ahora» envía las tareas que ya existían antes de conectar.
 - La sincronización automática se puede desactivar; «Desconectar» revoca el acceso.
 
-Permisos solicitados: `calendar.events` y el email de la cuenta. Los tokens se guardan cifrados.
+- Puedes elegir en qué calendario se crean los eventos de las tareas (por defecto, el principal).
+
+Permisos solicitados: `calendar.events`, la lista de tus calendarios (solo lectura) y el email de la cuenta.
+Si conectaste la cuenta antes de existir la elección de calendario, desconecta y vuelve a conectar para concederlo. Los tokens se guardan cifrados.
+
+## Rutinas, Pomodoro y progreso
+
+**Hoy** reúne las rutinas del día y las tareas con fecha de hoy (más las atrasadas). Una rutina es un check que
+vuelve a aparecer cada día que le toca; se crea escribiéndola en «Añadir rutina diaria» y en la pestaña *Rutinas*
+se eligen sus días, una hora prevista y su dificultad. Si olvidaste marcar algo, puedes volver hasta 7 días atrás.
+
+La pestaña **Estadísticas** muestra, para 14, 30 o 90 días: porcentaje de cumplimiento, días completos, rachas,
+una cuadrícula día a día (cumplida / no cumplida / pendiente / no tocaba), a qué hora sueles marcarlas y qué
+porcentaje se hizo antes de su hora prevista. El día en curso no cuenta como fallo hasta que termina.
+
+**Enfoque** es un reloj Pomodoro. Se ajustan los minutos de concentración y de descanso, los bloques por serie, el
+inicio automático, el sonido y la notificación. Sigue corriendo al cambiar de página o cerrar la pestaña. Al terminar
+un bloque, su tiempo se suma a la tarea elegida.
+
+**Progreso** convierte todo eso en experiencia (XP):
+
+| Origen | Experiencia |
+| --- | --- |
+| Tarea completada | 10 / 20 / 40 / 80 según la dificultad (fácil, normal, difícil, épica) |
+| Esfuerzo | +1 por cada 5 minutos registrados en la tarea (máx. 60); sin registro, +5 por hora estimada (máx. 40) |
+| Puntualidad y prioridad | +25 % de la base si se termina antes de su fecha; +3 prioridad alta, +5 urgente |
+| Subtarea | 5 |
+| Rutina | 5 / 10 / 15 / 25 según la dificultad, +1 por día de racha (máx. 10) |
+| Concentración | 1 por cada 5 minutos de bloque terminado |
+
+Reabrir una tarea o desmarcar una rutina retira su experiencia, y cada cosa puntúa una sola vez. En un proyecto
+compartido, la experiencia es para quien completa la tarea. Cada nivel pide 100 XP más que el anterior
+(nivel 2 a los 100, nivel 3 a los 300, nivel 4 a los 600…). Los rangos se alcanzan por nivel:
+Aspirante (1), Recluta (3), Soldado (5), Guerrero (8), Veterano (12), Centurión (16), Conquistador (20),
+Comandante (25), General (30) y Regente del Imperio (40).
 
 ## Recordatorios y email
 
@@ -135,7 +183,10 @@ Disponible en la build de producción (no con `ng serve`) y servida por HTTPS o 
 - **Leer sin red**: la aplicación se abre y muestra las tareas, notas y proyectos que ya habías consultado con conexión.
 - **Escribir notas sin red**: los cambios se guardan en el dispositivo y se envían al reconectar. Si la nota cambió
   mientras tanto en otro sitio, no se sobrescribe: tu versión se guarda como «Título (copia sin conexión)».
-- **Lo demás necesita conexión**: crear o modificar tareas, proyectos o notas nuevas sin red muestra un aviso y no se guarda.
+- **Crear tareas y notas sin red**: se guardan en el dispositivo marcadas como «pendiente» (se pueden corregir o
+  borrar) y se envían al reconectar.
+- **Lo demás necesita conexión**: modificar tareas que ya existen, proyectos, comentarios o subir imágenes sin red
+  muestra un aviso y no se guarda.
 - Al cerrar sesión se borran del dispositivo los datos guardados para uso sin conexión.
 
 ## Importar y exportar notas
@@ -146,7 +197,9 @@ En *Ajustes → Tus notas*:
 - **Importar** acepta un `.zip` (por ejemplo, tu carpeta de Obsidian comprimida) o archivos `.md`. El nombre del
   archivo es el título; se ignoran `.obsidian/`, `.trash/` y lo que no sea Markdown. El frontmatter YAML se conserva
   y sus `tags` se reconocen como etiquetas. Las notas que ya existen se omiten salvo que marques «Sobrescribir».
-- Límites: 50 MB por importación y 1 MB por nota. Los adjuntos (imágenes, PDF) no se importan.
+- Las imágenes viajan con las notas: la exportación las guarda en `adjuntos/` y la importación sube las que las
+  notas referencian, tanto `![](ruta)` como `![[imagen.png]]`.
+- Límites: 50 MB por importación, 1 MB por nota y 5 MB por imagen. Otros adjuntos (PDF, audio) no se importan.
 
 ## Migraciones de base de datos
 
@@ -175,7 +228,8 @@ cascada eliminaría filas relacionadas); añadir o quitar columnas funciona sin 
 
 En producción, el servicio `backup` guarda una copia de la base de datos al arrancar y después cada 24 horas en
 `BACKUP_DIR` (por defecto `./backups`), y conserva las de los últimos `BACKUP_KEEP_DAYS` días (14). Cada copia se
-verifica antes de darla por buena. **Las copias quedan en el mismo servidor**: cópialas además a otro sitio
+verifica antes de darla por buena. Junto a cada copia se guarda un `…-imagenes.tar.gz` con las imágenes de las notas,
+que viven en el volumen `uploads` y no en la base de datos. **Las copias quedan en el mismo servidor**: cópialas además a otro sitio
 (otro disco, almacenamiento en la nube) para que sobrevivan a un fallo de la máquina.
 
 ```bash
@@ -205,14 +259,14 @@ delante tu terminación TLS (Caddy, Traefik, un balanceador…).
 backend/
   app/
     main.py  config.py  database.py  models.py  schemas.py  security.py  deps.py
-    routers/    auth · tasks · projects · notes · stats · search · reminders · trash · calendar
+    routers/    auth · tasks · projects · notes · habits · pomodoro · game · stats · search · reminders · trash · attachments · calendar
     services/   markdown · notes · vault (importar/exportar) · access (permisos) · trash · recurrence · reminders · mailer · google_calendar
   migrations/   versiones de Alembic
   tests/
 frontend/src/app/
   core/      API, sesión, interceptor (renovación de token), tema, avisos, borradores sin conexión, utilidades
   layout/    barra lateral y buscador rápido
-  pages/     dashboard · tasks · kanban · projects · notes · graph · calendar · trash · settings · auth
+  pages/     dashboard · today · focus · progress · tasks · kanban · projects · notes · graph · calendar · trash · settings · auth
   shared/    editor, vista Markdown, gráficos, panel de tarea, iconos
 ```
 
@@ -225,6 +279,8 @@ Todas las rutas cuelgan de `/api/v1` y, salvo registro e inicio de sesión, requ
 | Sesión | `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` · `GET/PUT/DELETE /auth/me` · `POST /auth/change-password` |
 | Tareas | `GET/POST /tasks` · `GET/PUT/DELETE /tasks/{id}` · `PATCH /tasks/{id}/move` · `/tasks/{id}/comments` |
 | Proyectos | `GET/POST /projects` · `GET/PUT/DELETE /projects/{id}` · `GET/POST /projects/{id}/members` · `PUT/DELETE /projects/{id}/members/{user_id}` |
+| Rutinas | `GET/POST /habits` · `PUT/DELETE /habits/{id}` · `GET /habits/day` · `PUT /habits/{id}/check` · `GET /habits/stats` |
+| Pomodoro y progreso | `GET/PUT /pomodoro/settings` · `POST /pomodoro/sessions` · `GET /pomodoro/stats` · `GET /game/profile` · `GET /game/history` |
 | Papelera | `GET/DELETE /trash` · `POST /trash/{note\|task}/{id}/restore` · `DELETE /trash/{note\|task}/{id}` |
 | Notas | `GET/POST /notes` · `GET/PUT/DELETE /notes/{id}` · `GET /notes/by-title/{título}` · `POST /notes/daily` · `GET /notes/graph` · `GET /notes/tags` · `GET /notes/checklist` · `PATCH /notes/{id}/checklist` · `GET /notes/export` · `POST /notes/import` |
 | Otros | `GET /stats/overview` · `GET /search` · `POST /reminders/poll` · `GET /reminders/status` |

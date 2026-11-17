@@ -11,6 +11,7 @@ set -eu
 BACKUP_DIR="${BACKUP_DIR:-/backups}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS:-14}"
 INTERVAL_HOURS="${BACKUP_INTERVAL_HOURS:-24}"
+UPLOADS_DIR="${UPLOADS_DIR:-/uploads}"
 
 log() { echo "[backup] $(date -u +%Y-%m-%dT%H:%M:%SZ) $*"; }
 
@@ -32,7 +33,19 @@ backup_once() {
   fi
   mv "$tmp" "$BACKUP_DIR/$name"   # aparece con su nombre definitivo solo cuando está completa
   log "copia creada: $name ($(du -h "$BACKUP_DIR/$name" | cut -f1))"
+  # Las imágenes de las notas no están en la base de datos: se guardan aparte, con la misma marca de tiempo
+  if [ -d "$UPLOADS_DIR" ] && [ -n "$(ls -A "$UPLOADS_DIR" 2>/dev/null)" ]; then
+    files="${name%.dump}-imagenes.tar.gz"
+    if tar -czf "$BACKUP_DIR/.$files.partial" -C "$UPLOADS_DIR" . ; then
+      mv "$BACKUP_DIR/.$files.partial" "$BACKUP_DIR/$files"
+      log "imágenes copiadas: $files ($(du -h "$BACKUP_DIR/$files" | cut -f1))"
+    else
+      rm -f "$BACKUP_DIR/.$files.partial"
+      log "ERROR: no se pudieron copiar las imágenes"
+    fi
+  fi
   # Retención: solo se borran copias antiguas después de crear una nueva con éxito
+  find "$BACKUP_DIR" -maxdepth 1 -name 'viltrumflow-*-imagenes.tar.gz' -type f -mtime "+$KEEP_DAYS" -exec rm -f {} \;
   find "$BACKUP_DIR" -maxdepth 1 -name 'viltrumflow-*.dump' -type f -mtime "+$KEEP_DAYS" -exec rm -f {} \; -exec echo "[backup] eliminada copia antigua: {}" \;
   find "$BACKUP_DIR" -maxdepth 1 -name '.viltrumflow-*.partial' -type f -mmin +120 -exec rm -f {} \;
 }

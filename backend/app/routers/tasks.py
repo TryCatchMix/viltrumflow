@@ -9,7 +9,7 @@ from .. import schemas
 from ..database import get_db
 from ..deps import get_current_user
 from ..models import Comment, Note, Priority, Status, Task, User
-from ..services import access, mailer
+from ..services import access, game, mailer
 from ..services import google_calendar as gcal
 from ..services.recurrence import spawn_next
 
@@ -27,6 +27,10 @@ def _out(db: Session, user: User, task: Task, roles: Optional[Dict[int, str]] = 
     o.owner_name = display_name(task.owner)
     o.assignee_name = display_name(task.assignee) or None
     o.can_edit = access.can_edit(db, user, task, roles)
+    if task.note_id and task.note and task.note.owner_id == user.id and task.note.deleted_at is None:
+        o.note_title = task.note.title
+    else:
+        o.note_id = None  # las notas son privadas: no se expone ni su id a otros miembros
     return o
 
 
@@ -86,6 +90,10 @@ def _after_complete(db: Session, task: Task) -> None:
 def _apply_status(task: Task, status: Status) -> None:
     if status == Status.COMPLETED and task.status != Status.COMPLETED:
         task.completed_at = datetime.now(timezone.utc)
+        if task.timer_started_at:  # una tarea terminada no sigue contando tiempo
+            started = task.timer_started_at if task.timer_started_at.tzinfo else task.timer_started_at.replace(tzinfo=timezone.utc)
+            task.time_spent_seconds = (task.time_spent_seconds or 0) + max(0, int((task.completed_at - started).total_seconds()))
+            task.timer_started_at = None
     elif status != Status.COMPLETED:
         task.completed_at = None
     task.status = status
@@ -116,6 +124,7 @@ def list_tasks(
     due_from: Optional[datetime] = None,
     due_to: Optional[datetime] = None,
     assigned_to_me: bool = False,
+    note_id: Optional[int] = None,
     include_archived: bool = False,
     skip: int = Query(0, ge=0),
     limit: int = Query(500, ge=1, le=1000),
@@ -135,6 +144,8 @@ def list_tasks(
         query = query.filter(Task.priority == priority)
     if project_id is not None:
         query = query.filter(Task.project_id == project_id)
+    if note_id is not None:
+        query = query.filter(Task.note_id == note_id, Task.user_id == user.id)
     if assigned_to_me:
         query = query.filter(Task.assignee_id == user.id)
     if q:
@@ -181,6 +192,7 @@ def create_task(data: schemas.TaskCreate, user: User = Depends(get_current_user)
     if task.assignee_id:
         _notify_assignment(db, user, task)
     gcal.auto_sync(db, task.owner, task)
+    game.on_task_status(db, user, task)
     _after_complete(db, task)
     return _out(db, user, task)
 
@@ -234,6 +246,7 @@ def update_task(task_id: int, data: schemas.TaskUpdate, user: User = Depends(get
     if changed & SYNC_FIELDS:
         gcal.auto_sync(db, task.owner, task)
     if "status" in changed:
+        game.on_task_status(db, user, task)  # experiencia para quien la completa (o se retira si se reabre)
         _after_complete(db, task)
     return _out(db, user, task)
 
@@ -255,8 +268,42 @@ def move_task(task_id: int, data: schemas.TaskMove, user: User = Depends(get_cur
     db.refresh(task)
     if was_done != (task.status == Status.COMPLETED) or task.status == Status.ARCHIVED:
         gcal.auto_sync(db, task.owner, task)
+    if was_done != (task.status == Status.COMPLETED):
+        game.on_task_status(db, user, task)
     if not was_done:
         _after_complete(db, task)
+    return _out(db, user, task)
+
+
+def _stop_timer(task: Task, now: datetime) -> None:
+    if task.timer_started_at:
+        started = task.timer_started_at if task.timer_started_at.tzinfo else task.timer_started_at.replace(tzinfo=timezone.utc)
+        task.time_spent_seconds += max(0, int((now - started).total_seconds()))
+        task.timer_started_at = None
+
+
+@router.post("/{task_id}/timer/start", response_model=schemas.TaskOut)
+def start_timer(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Arranca el cronómetro de la tarea. Solo hay uno en marcha por persona: el anterior se detiene."""
+    task = _get(db, user, task_id, write=True)
+    now = datetime.now(timezone.utc)
+    running = db.query(Task).filter(Task.timer_started_at.isnot(None), access.responsible(user), Task.id != task.id).all()
+    for other in running:
+        if access.can_edit(db, user, other):
+            _stop_timer(other, now)
+    if not task.timer_started_at:
+        task.timer_started_at = now
+    db.commit()
+    db.refresh(task)
+    return _out(db, user, task)
+
+
+@router.post("/{task_id}/timer/stop", response_model=schemas.TaskOut)
+def stop_timer(task_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    task = _get(db, user, task_id, write=True)
+    _stop_timer(task, datetime.now(timezone.utc))
+    db.commit()
+    db.refresh(task)
     return _out(db, user, task)
 
 

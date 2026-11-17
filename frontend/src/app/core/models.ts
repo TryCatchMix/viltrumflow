@@ -44,19 +44,25 @@ export interface Task {
   due_date?: string | null; all_day: boolean; completed_at?: string | null; estimated_hours?: number | null;
   tags: string[]; position: number; project_id?: number | null; parent_task_id?: number | null;
   note_id?: number | null; google_event_id?: string | null; recurrence: Recurrence; reminder_minutes?: number | null;
-  user_id: number; owner_name: string; assignee_id?: number | null; assignee_name?: string | null; can_edit: boolean;
+  difficulty: number; time_spent_seconds: number; timer_started_at?: string | null;
+  user_id: number; note_title?: string | null; owner_name: string; assignee_id?: number | null; assignee_name?: string | null; can_edit: boolean;
   created_at: string; updated_at: string; subtasks: Subtask[];
+  /** Creada sin conexión y aún no enviada al servidor (id negativo provisional). */
+  pending?: boolean;
 }
 export type TaskInput = Partial<Pick<Task, 'title' | 'description' | 'status' | 'priority' | 'due_date' | 'all_day'
-  | 'estimated_hours' | 'tags' | 'project_id' | 'parent_task_id' | 'note_id' | 'recurrence' | 'reminder_minutes' | 'assignee_id'>>;
+  | 'estimated_hours' | 'tags' | 'project_id' | 'parent_task_id' | 'note_id' | 'recurrence' | 'reminder_minutes' | 'assignee_id' | 'time_spent_seconds' | 'difficulty'>>;
 export interface Comment { id: number; content: string; task_id: number; author_id: number; author_name: string; created_at: string; }
 
 export interface NoteSummary {
   id: number; title: string; folder: string; tags: string[]; is_pinned: boolean; is_daily: boolean;
   created_at: string; updated_at: string; snippet?: string | null;
+  pending?: boolean;
 }
 export interface NoteRef { id: number | null; title: string; context?: string | null; }
 export interface Note extends NoteSummary { content: string; backlinks: NoteRef[]; outgoing: NoteRef[]; }
+export interface NoteVersion { id: number; title: string; created_at: string; size: number; preview: string; content?: string; }
+export interface Mention { note_id: number; title: string; context: string; }
 export interface GraphNode { id: string; label: string; kind: 'note' | 'ghost' | 'tag'; note_id?: number | null; degree: number; folder: string; }
 export interface GraphEdge { source: string; target: string; kind: 'link' | 'tag'; }
 export interface Graph { nodes: GraphNode[]; edges: GraphEdge[]; }
@@ -71,10 +77,57 @@ export interface Overview {
   notes: number; links: number; timeline: DayPoint[];
   projects: { id: number; name: string; color: string; total: number; completed: number }[];
   top_tags: { tag: string; count: number }[];
+  time_tracking: { id: number; title: string; estimated_hours: number; spent_hours: number }[];
+  spent_hours_week: number;
 }
 
 export interface Reminder { kind: 'reminder' | 'assigned'; task_id: number; title: string; due_date?: string | null; all_day: boolean; by?: string | null; }
 export interface ImportResult { created: number; updated: number; skipped: number; errors: string[]; }
 
-export interface CalendarStatus { configured: boolean; connected: boolean; email?: string | null; auto_sync: boolean; }
+export interface CalendarStatus { configured: boolean; connected: boolean; email?: string | null; auto_sync: boolean; calendar_id: string; }
+export interface CalendarInfo { id: string; name: string; primary: boolean; }
 export interface CalendarEvent { id: string; title: string; start: string; end: string; all_day: boolean; html_link?: string | null; task_id?: number | null; }
+
+// ---------- Rutinas, Pomodoro y progreso ----------
+export const DIFFICULTY_LABEL: Record<number, string> = { 1: 'Fácil', 2: 'Normal', 3: 'Difícil', 4: 'Épica' };
+export const WEEKDAY_SHORT = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+export const WEEKDAY_NAME = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+
+export interface Habit {
+  id: number; title: string; days: string; target_time?: string | null; difficulty: number; color: string;
+  is_archived: boolean; start_day: string;
+}
+export type HabitInput = Partial<Pick<Habit, 'title' | 'days' | 'target_time' | 'difficulty' | 'color' | 'is_archived'>>;
+export interface HabitDayItem extends Habit { checked: boolean; checked_at?: string | null; streak: number; xp: number; }
+export type HabitState = 'done' | 'missed' | 'off' | 'pending';
+export interface HabitStat {
+  id: number; title: string; color: string; target_time?: string | null; days: string; scheduled: number; done: number;
+  rate: number | null; streak: number; best_streak: number; avg_minute: number | null; on_time_rate: number | null; states: HabitState[];
+}
+export interface HabitStats {
+  days: string[]; habits: HabitStat[]; daily: { date: string; scheduled: number; done: number }[]; hours: number[];
+  weekday: (number | null)[]; scheduled: number; done: number; rate: number | null; perfect_days: number;
+}
+
+export interface PomodoroSettings {
+  focus_minutes: number; short_break_minutes: number; long_break_minutes: number; cycles: number;
+  auto_start: boolean; sound: boolean; notify: boolean;
+}
+export interface PomodoroStats {
+  daily: { date: string; minutes: number; sessions: number }[]; today_sessions: number; today_minutes: number;
+  total_minutes: number; by_task: { title: string; minutes: number }[];
+}
+
+export interface Rank { name: string; min_level: number; min_xp: number; }
+export interface GameProfile {
+  xp: number; level: number; level_start_xp: number; next_level_xp: number; rank_index: number; rank: string;
+  next_rank: string | null; next_rank_level: number | null; ranks: Rank[];
+}
+export type XpKind = 'task' | 'habit' | 'focus';
+export const XP_KIND_LABEL: Record<XpKind, string> = { task: 'Tareas', habit: 'Rutinas', focus: 'Concentración' };
+export interface GameHistory {
+  daily: { date: string; task: number; habit: number; focus: number; total: number }[];
+  by_kind: Record<XpKind, number>; today_xp: number; week_xp: number;
+  recent: { kind: XpKind; amount: number; detail: string; created_at: string }[];
+  achievements: { id: string; name: string; description: string; progress: number; goal: number; unlocked: boolean }[];
+}

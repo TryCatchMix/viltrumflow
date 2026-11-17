@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, inject } from '@angular/core';
-import { renderMarkdown } from './markdown';
+import { AttachmentService } from '../core/attachment.service';
+import { ApiService } from '../core/api.service';
+import { renderMarkdown, sectionOf } from './markdown';
 
 /** Vista de lectura: pinta el Markdown ya saneado y delega los clics en enlaces, etiquetas y casillas. */
 @Component({
@@ -12,9 +14,14 @@ import { renderMarkdown } from './markdown';
 })
 export class MarkdownViewComponent implements OnChanges {
   private el = inject(ElementRef<HTMLElement>);
+  private attachments = inject(AttachmentService);
   @Input() content = '';
   /** Títulos existentes en minúsculas. */
   @Input() titles: Set<string> = new Set();
+  /** Si es false, las incrustaciones ![[Nota]] se dejan como texto (evita anidar sin fin). */
+  @Input() embeds = true;
+  private api = inject(ApiService);
+  /** Título de la nota, con «#Sección» si el enlace apunta a un encabezado. */
   @Output() openLink = new EventEmitter<string>();
   @Output() openTag = new EventEmitter<string>();
   @Output() toggle = new EventEmitter<{ line: number; checked: boolean }>();
@@ -22,6 +29,42 @@ export class MarkdownViewComponent implements OnChanges {
   ngOnChanges() {
     // Seguro: renderMarkdown devuelve HTML pasado por DOMPurify
     this.el.nativeElement.innerHTML = renderMarkdown(this.content, t => this.titles.has(t.toLowerCase()));
+    (this.el.nativeElement as HTMLElement).querySelectorAll<HTMLImageElement>('img[data-attachment]').forEach(img => {
+      this.attachments.objectUrl(img.dataset['attachment']!).then(url => (img.src = url), () => img.classList.add('broken'));
+    });
+    if (this.embeds) this.fillEmbeds();
+  }
+
+  /** Sustituye cada ![[Nota]] por el contenido de esa nota (o de una de sus secciones), un solo nivel. */
+  private fillEmbeds() {
+    const host = this.el.nativeElement as HTMLElement;
+    host.querySelectorAll<HTMLElement>('span.embed').forEach(span => {
+      const title = span.dataset['title']!, section = span.dataset['section'];
+      if (!this.titles.has(title.toLowerCase())) { span.classList.add('missing'); return; }
+      this.api.noteByTitle(title).subscribe({
+        next: note => {
+          if (!span.isConnected) return;  // la vista se volvió a pintar mientras tanto
+          const text = section ? sectionOf(note.content, section) : note.content;
+          const box = document.createElement('div');
+          box.className = 'embed-box';
+          const head = document.createElement('a');
+          head.className = 'wikilink embed-title';
+          head.dataset['title'] = note.title;
+          if (section) head.dataset['section'] = section;
+          head.textContent = section ? `${note.title} › ${section}` : note.title;
+          const body = document.createElement('div');
+          // Mismo saneado que el resto; las incrustaciones anidadas quedan como texto
+          body.innerHTML = text === null ? '<p><em>Sección no encontrada</em></p>' : renderMarkdown(text, t => this.titles.has(t.toLowerCase()));
+          body.querySelectorAll('input').forEach(i => (i.disabled = true));  // las casillas se marcan en su nota
+          body.querySelectorAll<HTMLImageElement>('img[data-attachment]').forEach(img => {
+            this.attachments.objectUrl(img.dataset['attachment']!).then(url => (img.src = url), () => img.classList.add('broken'));
+          });
+          box.append(head, body);
+          (span.closest('p')?.childNodes.length === 1 ? span.closest('p')! : span).replaceWith(box);
+        },
+        error: () => span.classList.add('missing'),
+      });
+    });
   }
 
   @HostListener('click', ['$event'])
@@ -29,7 +72,7 @@ export class MarkdownViewComponent implements OnChanges {
   onClick(e: Event) {
     const target = e.target as HTMLElement;
     const link = target.closest<HTMLElement>('a.wikilink');
-    if (link) { e.preventDefault(); this.openLink.emit(link.dataset['title']!); return; }
+    if (link) { e.preventDefault(); this.openLink.emit(link.dataset['title']! + (link.dataset['section'] ? '#' + link.dataset['section'] : '')); return; }
     const tag = target.closest<HTMLElement>('a.hashtag');
     if (tag) { e.preventDefault(); this.openTag.emit(tag.dataset['tag']!); return; }
     if (e.type === 'click' && target instanceof HTMLInputElement && target.dataset['line']) {

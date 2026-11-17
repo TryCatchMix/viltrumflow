@@ -90,3 +90,55 @@ def test_stats_overview(client, auth):
     assert o["overdue"] == 0  # completada: ya no cuenta como atrasada
     assert len(o["timeline"]) == 7 and o["timeline"][-1]["created"] == 2 and o["timeline"][-1]["open"] == 1
     assert o["notes"] == 2 and o["top_tags"] == [{"tag": "x", "count": 1}]
+
+
+def test_due_date_with_offset_is_stored_in_utc(client, auth):
+    t = client.post(T, headers=auth, json={"title": "Con desfase", "all_day": False, "due_date": "2026-03-11T16:30:00+01:00"}).json()
+    assert t["due_date"].startswith("2026-03-11T15:30")
+    u = client.put(f"{T}/{t['id']}", headers=auth, json={"due_date": "2026-03-11T23:30:00-05:00"}).json()
+    assert u["due_date"].startswith("2026-03-12T04:30")
+
+
+def test_time_tracking(client, auth):
+    from datetime import datetime, timedelta, timezone
+    from app.database import SessionLocal
+    from app.models import Task
+
+    def rewind(task_id, minutes):  # como si el cronómetro llevara ese tiempo en marcha
+        with SessionLocal() as db:
+            db.get(Task, task_id).timer_started_at = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+            db.commit()
+
+    a = client.post(T, headers=auth, json={"title": "Informe", "estimated_hours": 2}).json()
+    b = client.post(T, headers=auth, json={"title": "Correo"}).json()
+    assert client.post(f"{T}/{a['id']}/timer/start", headers=auth).json()["timer_started_at"] is not None
+    rewind(a["id"], 30)
+    # arrancar otra tarea detiene la anterior y le suma su tiempo
+    client.post(f"{T}/{b['id']}/timer/start", headers=auth)
+    a2 = client.get(f"{T}/{a['id']}", headers=auth).json()
+    assert a2["timer_started_at"] is None and 1795 <= a2["time_spent_seconds"] <= 1810
+    rewind(b["id"], 10)
+    # completar una tarea detiene su cronómetro
+    b2 = client.put(f"{T}/{b['id']}", headers=auth, json={"status": "completed"}).json()
+    assert b2["timer_started_at"] is None and 595 <= b2["time_spent_seconds"] <= 610
+    assert client.post(f"{T}/{a['id']}/timer/stop", headers=auth).json()["time_spent_seconds"] == a2["time_spent_seconds"]  # parar dos veces no suma
+
+    # corrección manual y resumen estimado/real
+    assert client.put(f"{T}/{a['id']}", headers=auth, json={"time_spent_seconds": 5400}).json()["time_spent_seconds"] == 5400
+    o = client.get("/api/v1/stats/overview", headers=auth).json()
+    assert o["time_tracking"] == [{"id": a["id"], "title": "Informe", "estimated_hours": 2, "spent_hours": 1.5}]
+    assert o["spent_hours_week"] == 1.7
+
+
+def test_datetimes_always_carry_a_timezone(client, auth):
+    """Sin zona horaria, el navegador leería las horas como locales (pasaba con SQLite)."""
+    import re
+    t = client.post(T, headers=auth, json={"title": "Con hora", "all_day": False, "due_date": "2026-03-11T16:30:00+01:00"}).json()
+    client.post(f"{T}/{t['id']}/timer/start", headers=auth)
+    client.post(f"{T}/{t['id']}/comments", headers=auth, json={"content": "hola"})
+    t = client.get(f"{T}/{t['id']}", headers=auth).json()
+    stamps = [t["due_date"], t["created_at"], t["updated_at"], t["timer_started_at"],
+              client.get(f"{T}/{t['id']}/comments", headers=auth).json()[0]["created_at"],
+              client.get("/api/v1/notes", headers=auth).json()[0]["updated_at"],
+              client.get("/api/v1/auth/me", headers=auth).json()["created_at"]]
+    assert all(re.search(r"(Z|[+-]\d{2}:\d{2})$", s) for s in stamps), stamps

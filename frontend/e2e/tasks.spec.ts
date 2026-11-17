@@ -78,3 +78,40 @@ test('panel de inicio y calendario muestran las tareas', async ({ browser }) => 
   await expect(page.locator('.cell.today .ev')).toHaveText('Entrega de hoy');
   await expect(page.getByText('La integración no está configurada')).toBeVisible();
 });
+
+test('captura rápida en lenguaje natural y casilla convertida en tarea', async ({ browser }) => {
+  const { page, api } = await register(browser);
+  await api('POST', '/projects', { name: 'Web corporativa' });
+  await api('POST', '/notes', { title: 'Plan', content: '- [ ] Pedir presupuesto el viernes !alta\n- [ ] otra cosa' });
+
+  await page.goto('/tasks');
+  const quick = page.getByLabel('Añadir tarea rápida');
+  await quick.fill('Llamar a Juan mañana a las 10 #trabajo !urgente @web cada semana');
+  const preview = page.locator('.preview');
+  await expect(preview).toContainText('Llamar a Juan');
+  await expect(preview).toContainText('Mañana 10:00');
+  await expect(preview).toContainText('Web corporativa');
+  await quick.press('Enter');
+  await expect(taskRow(page, 'Llamar a Juan')).toBeVisible();
+  const created = (await api('GET', '/tasks')).find((t: any) => t.title === 'Llamar a Juan');
+  expect(created).toMatchObject({ priority: 'urgent', tags: ['trabajo'], recurrence: 'weekly', all_day: false });
+  expect(created.project_id).not.toBeNull();
+  // las 10:00 en la zona horaria del navegador de la prueba
+  expect(new Date(created.due_date).toLocaleTimeString('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' })).toBe('10:00');
+
+  // una casilla de una nota pasa a ser tarea, con su fecha y prioridad interpretadas
+  await page.getByRole('tab', { name: /Casillas de notas/ }).click();
+  await page.locator('.task', { hasText: 'Pedir presupuesto' }).hover();
+  await page.locator('.task', { hasText: 'Pedir presupuesto' }).getByRole('button', { name: 'Convertir en tarea' }).click();
+  await expect(toast(page)).toContainText('Tarea creada: Pedir presupuesto');
+  await expect(page.locator('.task', { hasText: 'Pedir presupuesto' })).toHaveCount(0);
+  const converted = (await api('GET', '/tasks')).find((t: any) => t.title === 'Pedir presupuesto');
+  expect(converted).toMatchObject({ priority: 'high', note_title: 'Plan' });
+  expect(converted.due_date).not.toBeNull();
+  expect((await api('GET', '/notes/by-title/Plan')).content).toContain('- Pedir presupuesto el viernes !alta *(convertida en tarea)*');
+
+  // la nota muestra su tarea y la tarea enlaza a la nota
+  await page.goto(`/notes/${converted.note_id}`);
+  await page.locator('.side .out', { hasText: 'Pedir presupuesto' }).click();
+  await expect(page.locator('.drawer .from')).toContainText('Viene de la nota «Plan»');
+});

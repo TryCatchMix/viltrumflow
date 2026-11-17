@@ -59,7 +59,7 @@ def spawn_next(db: Session, task: Task) -> Optional[Task]:
         due_date=next_due(task.due_date, task.recurrence), all_day=task.all_day,
         estimated_hours=task.estimated_hours, tags=task.tags, project_id=task.project_id, note_id=task.note_id,
         user_id=task.user_id, recurrence=task.recurrence, reminder_minutes=task.reminder_minutes,
-        assignee_id=task.assignee_id, assigned_notified_at=task.assigned_notified_at,
+        difficulty=task.difficulty, assignee_id=task.assignee_id, assigned_notified_at=task.assigned_notified_at,
     )
     first = db.query(Task.position).filter(Task.user_id == task.user_id, Task.status == Status.TODO).order_by(Task.position).first()
     nxt.position = (first[0] - 1) if first else 0
