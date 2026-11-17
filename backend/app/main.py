@@ -10,7 +10,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from .config import settings
 from .database import SessionLocal, check_db_connection, init_db
-from .routers import attachments, auth, calendar, notes, projects, reminders, search, stats, tasks, trash
+from .routers import attachments, auth, calendar, game, habits, pomodoro, notes, projects, reminders, search, stats, tasks, trash
 from .services import google_calendar as gcal
 from .services.reminders import run_tick
 
@@ -98,6 +98,9 @@ app.include_router(notes.router, prefix=f"{P}/notes", tags=["Notes"])
 app.include_router(stats.router, prefix=f"{P}/stats", tags=["Stats"])
 app.include_router(search.router, prefix=f"{P}/search", tags=["Search"])
 app.include_router(attachments.router, prefix=f"{P}/attachments", tags=["Attachments"])
+app.include_router(habits.router, prefix=f"{P}/habits", tags=["Habits"])
+app.include_router(pomodoro.router, prefix=f"{P}/pomodoro", tags=["Pomodoro"])
+app.include_router(game.router, prefix=f"{P}/game", tags=["Game"])
 app.include_router(trash.router, prefix=f"{P}/trash", tags=["Trash"])
 app.include_router(reminders.router, prefix=f"{P}/reminders", tags=["Reminders"])
 app.include_router(calendar.router, prefix=f"{P}/calendar", tags=["Calendar"])

@@ -56,4 +56,4 @@ def test_legacy_database_without_version_table_is_stamped():
     init_db()
     with engine.connect() as conn:
         assert "recurrence" in {c["name"] for c in inspect(conn).get_columns("tasks")}
-        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0005"
+        assert conn.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0006"

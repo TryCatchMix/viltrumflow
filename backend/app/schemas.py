@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -178,6 +178,7 @@ class MemberOut(BaseModel):
 
 # ---------- Tareas ----------
 class TaskCreate(BaseModel):
+    difficulty: int = Field(2, ge=1, le=4)  # 1 fácil · 2 normal · 3 difícil · 4 épica
     _utc = field_validator("due_date")(_to_utc)
 
     title: str = Field(min_length=1, max_length=200)
@@ -197,6 +198,7 @@ class TaskCreate(BaseModel):
 
 
 class TaskUpdate(BaseModel):
+    difficulty: Optional[int] = Field(None, ge=1, le=4)  # 1 fácil · 2 normal · 3 difícil · 4 épica
     _utc = field_validator("due_date")(_to_utc)
 
     title: Optional[str] = Field(None, min_length=1, max_length=200)
@@ -244,6 +246,7 @@ class TaskOut(ORM):
     google_event_id: Optional[str] = None
     recurrence: str = "none"
     reminder_minutes: Optional[int] = None
+    difficulty: int = 2
     time_spent_seconds: int = 0
     timer_started_at: Optional[datetime] = None
     user_id: int
@@ -485,3 +488,87 @@ class CalendarEvent(BaseModel):
 class SyncResult(BaseModel):
     synced: int
     failed: int
+
+
+# ---------- Rutinas ----------
+def _days(v: str) -> str:
+    if not v or any(c not in "0123456" for c in v):
+        raise ValueError("Días no válidos: usa dígitos de 0 (lunes) a 6 (domingo)")
+    return "".join(sorted(set(v)))
+
+
+class HabitIn(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    days: str = Field("0123456", min_length=1, max_length=7)
+    target_time: Optional[str] = Field(None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    difficulty: int = Field(2, ge=1, le=4)
+    color: str = Field("#7c5cff", pattern=HEX)
+
+    _d = field_validator("days")(_days)
+
+
+class HabitUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    days: Optional[str] = Field(None, min_length=1, max_length=7)
+    target_time: Optional[str] = Field(None, pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    difficulty: Optional[int] = Field(None, ge=1, le=4)
+    color: Optional[str] = Field(None, pattern=HEX)
+    is_archived: Optional[bool] = None
+
+    @field_validator("days")
+    @classmethod
+    def _d(cls, v):
+        return _days(v) if v is not None else v
+
+
+class HabitOut(ORM):
+    id: int
+    title: str
+    days: str
+    target_time: Optional[str] = None
+    difficulty: int
+    color: str
+    is_archived: bool
+    start_day: date
+
+
+class HabitDayItem(HabitOut):
+    checked: bool = False
+    checked_at: Optional[datetime] = None
+    streak: int = 0
+    xp: int = 0  # experiencia que da (o dio) marcarla ese día
+
+
+class HabitCheckIn(BaseModel):
+    day: date
+    checked: bool
+
+
+class HabitCheckResult(BaseModel):
+    item: HabitDayItem
+    xp_gained: int
+
+
+# ---------- Pomodoro ----------
+class PomodoroSettings(BaseModel):
+    focus_minutes: int = Field(25, ge=1, le=180)
+    short_break_minutes: int = Field(5, ge=1, le=60)
+    long_break_minutes: int = Field(15, ge=1, le=120)
+    cycles: int = Field(4, ge=1, le=12, description="Bloques de concentración antes del descanso largo")
+    auto_start: bool = False
+    sound: bool = True
+    notify: bool = True
+
+
+class PomodoroSessionIn(BaseModel):
+    seconds: int = Field(ge=60, le=10800)
+    task_id: Optional[int] = None
+
+
+class PomodoroSessionOut(Out):
+    id: int
+    seconds: int
+    ended_at: datetime
+    task_id: Optional[int] = None
+    task_title: Optional[str] = None
+    xp_gained: int = 0

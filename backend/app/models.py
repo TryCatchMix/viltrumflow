@@ -62,6 +62,8 @@ class User(TimestampMixin, Base):
     daily_digest: Mapped[bool] = mapped_column(Boolean, default=False)
     digest_hour: Mapped[int] = mapped_column(Integer, default=8)  # hora local del resumen diario
     last_digest_on: Mapped[Optional[date]] = mapped_column(Date)
+    # Ajustes del reloj Pomodoro (JSON); None = valores por defecto
+    pomodoro: Mapped[Optional[str]] = mapped_column(Text)
 
     projects: Mapped[List["Project"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     tasks: Mapped[List["Task"]] = relationship(
@@ -131,6 +133,9 @@ class Task(TimestampMixin, Base):
 
     # Papelera: borrado lógico; se purga pasados 30 días
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
+
+    # Dificultad (1 fácil … 4 épica): decide la experiencia que da completarla
+    difficulty: Mapped[int] = mapped_column(Integer, default=2)
 
     # Registro de tiempo: segundos acumulados y, si el cronómetro está en marcha, cuándo arrancó
     time_spent_seconds: Mapped[int] = mapped_column(Integer, default=0)
@@ -240,6 +245,66 @@ class NoteLink(Base):
 
     source: Mapped[Note] = relationship(back_populates="links", foreign_keys=[source_id])
     target: Mapped[Optional[Note]] = relationship(foreign_keys=[target_id])
+
+
+class Habit(TimestampMixin, Base):
+    """Rutina: un check que se repite los días de la semana indicados (como una lista diaria)."""
+
+    __tablename__ = "habits"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    days: Mapped[str] = mapped_column(String(7), default="0123456")  # días activos: 0 = lunes … 6 = domingo
+    target_time: Mapped[Optional[str]] = mapped_column(String(5))  # hora prevista "HH:MM" (opcional)
+    difficulty: Mapped[int] = mapped_column(Integer, default=2)
+    color: Mapped[str] = mapped_column(String(7), default="#7c5cff")
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    start_day: Mapped[date] = mapped_column(Date)  # día (local del usuario) desde el que cuenta
+
+    checks: Mapped[List["HabitCheck"]] = relationship(back_populates="habit", cascade="all, delete-orphan")
+
+
+class HabitCheck(Base):
+    """La rutina se cumplió ese día. `checked_at` guarda a qué hora se marcó."""
+
+    __tablename__ = "habit_checks"
+    __table_args__ = (UniqueConstraint("habit_id", "day", name="uq_habit_day"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    habit_id: Mapped[int] = mapped_column(ForeignKey("habits.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column(Date, index=True)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    habit: Mapped[Habit] = relationship(back_populates="checks")
+
+
+class XpEvent(Base):
+    """Experiencia ganada. (kind, ref) es único: una misma tarea o check no puntúa dos veces."""
+
+    __tablename__ = "xp_events"
+    __table_args__ = (UniqueConstraint("kind", "ref", name="uq_xp_kind_ref"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(20))  # task | subtask | habit | focus
+    ref: Mapped[str] = mapped_column(String(60))
+    amount: Mapped[int] = mapped_column(Integer)
+    detail: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class PomodoroSession(Base):
+    """Bloque de concentración terminado."""
+
+    __tablename__ = "pomodoro_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    task_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"))
+    seconds: Mapped[int] = mapped_column(Integer)
+    ended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
 
 class GoogleAccount(TimestampMixin, Base):

@@ -9,7 +9,7 @@ from .. import schemas
 from ..database import get_db
 from ..deps import get_current_user
 from ..models import Comment, Note, Priority, Status, Task, User
-from ..services import access, mailer
+from ..services import access, game, mailer
 from ..services import google_calendar as gcal
 from ..services.recurrence import spawn_next
 
@@ -192,6 +192,7 @@ def create_task(data: schemas.TaskCreate, user: User = Depends(get_current_user)
     if task.assignee_id:
         _notify_assignment(db, user, task)
     gcal.auto_sync(db, task.owner, task)
+    game.on_task_status(db, user, task)
     _after_complete(db, task)
     return _out(db, user, task)
 
@@ -245,6 +246,7 @@ def update_task(task_id: int, data: schemas.TaskUpdate, user: User = Depends(get
     if changed & SYNC_FIELDS:
         gcal.auto_sync(db, task.owner, task)
     if "status" in changed:
+        game.on_task_status(db, user, task)  # experiencia para quien la completa (o se retira si se reabre)
         _after_complete(db, task)
     return _out(db, user, task)
 
@@ -266,6 +268,8 @@ def move_task(task_id: int, data: schemas.TaskMove, user: User = Depends(get_cur
     db.refresh(task)
     if was_done != (task.status == Status.COMPLETED) or task.status == Status.ARCHIVED:
         gcal.auto_sync(db, task.owner, task)
+    if was_done != (task.status == Status.COMPLETED):
+        game.on_task_status(db, user, task)
     if not was_done:
         _after_complete(db, task)
     return _out(db, user, task)
