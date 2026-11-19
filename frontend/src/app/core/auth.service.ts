@@ -1,7 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { Observable, finalize, shareReplay, tap } from 'rxjs';
+import { Observable, finalize, map, shareReplay, switchMap, tap } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { Token, User } from './models';
 
@@ -41,11 +41,42 @@ export class AuthService {
     return this.refreshing$;
   }
 
+  /** Métodos de acceso activos en el servidor (p. ej. si mostrar «Continuar con Google»). */
+  providers() { return this.http.get<{ google: boolean }>(`${this.api}/providers`); }
+
+  /** Entrar o registrarse con Google: navegación completa, el servidor redirige a Google y vuelve a /login. */
+  signInWithGoogle() { window.location.assign(`${this.api}/google/start`); }
+
+  /** Canjea el código de un solo uso que deja el servidor en /login#google_code=… */
+  exchangeGoogleCode(code: string) {
+    return this.http.post<Token>(`${this.api}/google/exchange`, { code }).pipe(tap(t => this.store(t)));
+  }
+
+  /** Vincula Google a la cuenta abierta. El vale viaja en un formulario (POST), no en la URL. */
+  linkGoogle() {
+    return this.http.post<{ ticket: string }>(`${this.api}/google/link-ticket`, {}).pipe(tap(({ ticket }) => {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = `${this.api}/google/start`;
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'ticket';
+      input.value = ticket;
+      form.appendChild(input);
+      document.body.appendChild(form);
+      form.submit();
+    }));
+  }
+  unlinkGoogle() { return this.http.delete<User>(`${this.api}/google/link`).pipe(tap(u => this.user.set(u))); }
+
   loadUser() { return this.http.get<User>(`${this.api}/me`).pipe(tap(u => this.user.set(u))); }
   updateProfile(data: Partial<User>) { return this.http.put<User>(`${this.api}/me`, data).pipe(tap(u => this.user.set(u))); }
-  changePassword(current_password: string, new_password: string) {
+  changePassword(current_password: string | null, new_password: string) {
     // El servidor cierra las demás sesiones y devuelve tokens nuevos para esta
-    return this.http.post<Token>(`${this.api}/change-password`, { current_password, new_password }).pipe(tap(t => this.store(t)));
+    return this.http.post<Token>(`${this.api}/change-password`, { current_password, new_password }).pipe(
+      tap(t => this.store(t)),
+      switchMap(t => this.loadUser().pipe(map(() => t))),
+    );
   }
   forgotPassword(email: string) { return this.http.post<{ message: string }>(`${this.api}/forgot-password`, { email }); }
   resetPassword(token: string, new_password: string) {

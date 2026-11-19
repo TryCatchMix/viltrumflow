@@ -47,6 +47,10 @@ class User(TimestampMixin, Base):
     username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     full_name: Mapped[Optional[str]] = mapped_column(String(100))
     hashed_password: Mapped[str] = mapped_column(String(255))
+    # Inicio de sesión con Google: «sub» de la cuenta vinculada. Las cuentas creadas con Google
+    # tienen una contraseña aleatoria que nadie conoce hasta que eligen una (password_set=False)
+    google_sub: Mapped[Optional[str]] = mapped_column(String(255), unique=True, index=True)
+    password_set: Mapped[bool] = mapped_column(Boolean, default=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     avatar_url: Mapped[Optional[str]] = mapped_column(String(500))
     bio: Mapped[Optional[str]] = mapped_column(Text)
@@ -79,6 +83,14 @@ class User(TimestampMixin, Base):
     google_account: Mapped[Optional["GoogleAccount"]] = relationship(
         back_populates="user", cascade="all, delete-orphan", uselist=False
     )
+
+    @property
+    def has_password(self) -> bool:
+        return bool(self.password_set)
+
+    @property
+    def google_linked(self) -> bool:
+        return bool(self.google_sub)
 
 
 class Project(TimestampMixin, Base):

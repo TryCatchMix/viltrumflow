@@ -1,6 +1,6 @@
 import { AfterViewInit, Component, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../core/api.service';
 import { ImportResult } from '../core/models';
 import { NotificationService } from '../core/notification.service';
@@ -99,12 +99,33 @@ import { ToastService } from '../core/toast.service';
       <div><a class="btn" routerLink="/calendar">Abrir calendario</a></div>
     </section>
 
+    @if (googleLogin() || auth.user()?.google_linked) {
+      <section class="card sec" id="google">
+        <h2>Iniciar sesión con Google</h2>
+        @if (auth.user()?.google_linked) {
+          <p class="muted"><span class="ok"></span> Tu cuenta está vinculada: puedes entrar con el botón «Continuar con Google».</p>
+          @if (auth.user()?.has_password) {
+            <div><button class="btn" (click)="unlinkGoogle()" [disabled]="busy()">Desvincular Google</button></div>
+          } @else {
+            <p class="muted">Para desvincularla, elige antes una contraseña aquí abajo: si no, no podrías volver a entrar.</p>
+          }
+        } @else {
+          <p class="muted">Vincula tu cuenta de Google para entrar sin escribir la contraseña.</p>
+          <div><button class="btn" (click)="linkGoogle()" [disabled]="busy()">Vincular cuenta de Google</button></div>
+        }
+      </section>
+    }
+
     <form class="card sec" (ngSubmit)="changePassword()">
       <h2>Contraseña</h2>
-      <label class="field">Contraseña actual <input class="input" type="password" name="cur" [(ngModel)]="pw.current" required autocomplete="current-password" /></label>
+      @if (auth.user()?.has_password === false) {
+        <p class="muted">Entraste con Google y aún no tienes contraseña. Elige una para poder entrar también con tu usuario o email.</p>
+      } @else {
+        <label class="field">Contraseña actual <input class="input" type="password" name="cur" [(ngModel)]="pw.current" required autocomplete="current-password" /></label>
+      }
       <label class="field">Nueva contraseña <input class="input" type="password" name="new" [(ngModel)]="pw.next" required minlength="8" autocomplete="new-password" />
         <span class="muted" style="font-weight:400">Mínimo 8 caracteres, con mayúscula, minúscula y número.</span></label>
-      <div class="row"><span class="spacer"></span><button class="btn" [disabled]="busy() || !pw.current || pw.next.length < 8">Cambiar contraseña</button></div>
+      <div class="row"><span class="spacer"></span><button class="btn" [disabled]="busy() || (needsCurrent() && !pw.current) || pw.next.length < 8">{{ needsCurrent() ? 'Cambiar contraseña' : 'Guardar contraseña' }}</button></div>
     </form>
 
     <section class="card sec">
@@ -127,6 +148,7 @@ export class SettingsComponent implements AfterViewInit {
   push = inject(PushService);
   private api = inject(ApiService);
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   hours = Array.from({ length: 24 }, (_, i) => i);
   emailReady = signal(true);
   result = signal<ImportResult | null>(null);
@@ -138,6 +160,8 @@ export class SettingsComponent implements AfterViewInit {
   p = { full_name: '', email: '', bio: '' };
   pw = { current: '', next: '' };
   busy = signal(false);
+  googleLogin = signal(false);
+  needsCurrent = () => this.auth.user()?.has_password !== false;
 
   constructor() {
     effect(() => {
@@ -148,6 +172,18 @@ export class SettingsComponent implements AfterViewInit {
 
   ngAfterViewInit() {
     this.api.notificationStatus().subscribe(s => this.emailReady.set(s.email_configured));
+    this.auth.providers().subscribe({ next: p => this.googleLogin.set(p.google), error: () => {} });
+    const google = this.route.snapshot.queryParamMap.get('google');
+    if (google) {
+      const msg: Record<string, string> = {
+        linked: 'Cuenta de Google vinculada', taken: 'Esa cuenta de Google ya está vinculada a otro usuario',
+        denied: 'Has cancelado la vinculación con Google', expired: 'La vinculación ha caducado; vuelve a intentarlo',
+        unavailable: 'El acceso con Google no está disponible en este servidor',
+      };
+      if (google === 'linked') { this.toast.success(msg['linked']); this.auth.loadUser().subscribe(); }
+      else this.toast.show(msg[google] ?? 'No se pudo vincular la cuenta de Google', 'error');
+      this.router.navigate([], { queryParams: {}, replaceUrl: true });
+    }
     const id = this.route.snapshot.fragment;
     if (id) setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: 'start' }));
   }
@@ -205,9 +241,21 @@ export class SettingsComponent implements AfterViewInit {
     this.theme.set(t);
     this.auth.updateProfile({ theme: t }).subscribe({ error: () => {} });
   }
+  linkGoogle() {
+    this.busy.set(true);
+    // Si va bien, el navegador sale hacia Google y vuelve a /settings?google=…
+    this.auth.linkGoogle().subscribe({ error: e => { this.busy.set(false); this.toast.error(e); } });
+  }
+  unlinkGoogle() {
+    this.busy.set(true);
+    this.auth.unlinkGoogle().subscribe({
+      next: () => { this.busy.set(false); this.toast.success('Cuenta de Google desvinculada'); },
+      error: e => { this.busy.set(false); this.toast.error(e); },
+    });
+  }
   changePassword() {
     this.busy.set(true);
-    this.auth.changePassword(this.pw.current, this.pw.next).subscribe({
+    this.auth.changePassword(this.needsCurrent() ? this.pw.current : null, this.pw.next).subscribe({
       next: () => { this.busy.set(false); this.pw = { current: '', next: '' }; this.toast.success('Contraseña actualizada. Se han cerrado tus otras sesiones'); },
       error: e => { this.busy.set(false); this.toast.error(e); },
     });
