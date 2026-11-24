@@ -163,6 +163,7 @@ export class ShellComponent implements OnInit, OnDestroy {
     { path: '/kanban', icon: 'board', label: 'Tablero' },
     { path: '/calendar', icon: 'calendar', label: 'Calendario' },
     { path: '/projects', icon: 'folder', label: 'Proyectos' },
+    { path: '/goals', icon: 'mountain', label: 'Objetivos' },
     { path: '/focus', icon: 'target', label: 'Enfoque' },
     { path: '/review', icon: 'history', label: 'Revisión semanal' },
     { path: '/missions', icon: 'flag', label: 'Misiones' },

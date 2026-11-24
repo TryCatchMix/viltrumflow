@@ -27,6 +27,8 @@ notas Markdown con `[[enlaces]]` al estilo Obsidian, vista de grafo y panel con 
 | **Estadísticas de rutinas** | Qué se cumple y qué no día a día, porcentaje, rachas, a qué hora se marcan, puntualidad frente a la hora prevista y cumplimiento por día de la semana |
 | **Pomodoro** | Reloj configurable (concentración, descansos, bloques por serie, inicio automático, sonido y aviso); cada bloque suma tiempo a la tarea elegida |
 | **Progreso** | Experiencia por tareas, rutinas y concentración; niveles, diez rangos del Imperio, logros y gráficos |
+| **Objetivos a largo plazo** | Metas con fecha límite que agrupan proyectos, tareas, rutinas e hitos; avance, ritmo esperado y experiencia al cumplirlas |
+| **Compartir desde el móvil** | Con la app instalada, ViltrumFlow aparece en el menú «Compartir» de Android: lo compartido se guarda como nota o tarea |
 | **Misiones y recompensas** | Tres misiones semanales con experiencia y monedas, protector de racha y premios propios que se canjean con monedas |
 | **Tareas** | Alta rápida, subtareas, comentarios, prioridad, etiquetas, fecha con o sin hora, filtros y agrupación |
 | **Recurrentes** | Cada día, días laborables, cada semana, cada 2 semanas, cada mes o cada año: al completar una tarea se crea la siguiente |
@@ -183,6 +185,28 @@ compartido, la experiencia es para quien completa la tarea. Cada nivel pide 100 
 (nivel 2 a los 100, nivel 3 a los 300, nivel 4 a los 600…). Los rangos se alcanzan por nivel:
 Aspirante (1), Recluta (3), Soldado (5), Guerrero (8), Veterano (12), Centurión (16), Conquistador (20),
 Comandante (25), General (30) y Regente del Imperio (40).
+
+## Objetivos a largo plazo
+
+En **Objetivos** (menú lateral) defines metas como «Aprobar las oposiciones» o «Lanzar mi web», con fecha límite opcional.
+
+- **Qué empuja hacia el objetivo**: hitos (pasos que marcas a mano), tareas sueltas, proyectos enteros (cuentan sus
+  tareas principales, también las que se añadan después) y rutinas. Un mismo proyecto o tarea puede servir a varios
+  objetivos, y en los proyectos compartidos cada miembro lo liga a sus propios objetivos.
+- **Avance**: tareas e hitos hechos sobre el total. Las rutinas no suman al porcentaje: se muestra su constancia
+  (lo cumplido en los últimos 28 días).
+- **Ritmo**: con fecha límite, una marca en la barra indica dónde deberías ir según el tiempo transcurrido; si te
+  quedas más de 10 puntos por detrás, aparece «Vas con retraso». Sin tareas ni hitos, el ritmo se mide con las rutinas.
+- **Cumplirlo** da 50 XP más 10 por cada tarea o hito hecho (máximo 300) y cuenta para los logros «Objetivo cumplido» y
+  «Visión imperial». Reabrirlo o eliminarlo retira esa experiencia.
+- Los objetivos en marcha aparecen también en **Inicio**.
+
+## Compartir desde el móvil
+
+Con ViltrumFlow instalada (ver *Uso sin conexión*), en Android aparece en el menú **Compartir** de cualquier app.
+Lo compartido abre «Guardar lo compartido»: un enlace se propone como tarea («leer más tarde») y un texto como nota
+(con la etiqueta `#compartido`); puedes cambiarlo antes de guardar. Si ya existe una nota con ese título se guarda
+como «Título (2)». En iPhone, Safari no permite que las aplicaciones web reciban contenido compartido.
 
 ## Misiones, monedas y recompensas
 
@@ -349,6 +373,7 @@ Todas las rutas cuelgan de `/api/v1` y, salvo registro e inicio de sesión, requ
 | Rutinas | `GET/POST /habits` · `PUT/DELETE /habits/{id}` · `GET /habits/day` · `PUT /habits/{id}/check` · `GET /habits/stats` |
 | Avisos push y revisión | `GET /push/key` · `POST /push/subscribe` · `POST /push/unsubscribe` · `POST /push/test` · `GET/PUT /review` · `POST /review/complete` · `GET /review/today` · `PUT /review/goal` |
 | Pomodoro y progreso | `GET/PUT /pomodoro/settings` · `POST /pomodoro/sessions` · `GET /pomodoro/stats` · `GET /game/profile` · `GET /game/history` |
+| Objetivos | `GET/POST /goals` · `GET/PUT/DELETE /goals/{id}` · `POST /goals/{id}/complete` · `POST /goals/{id}/reopen` · `POST /goals/{id}/milestones` · `PUT/DELETE /goals/milestones/{id}` · `POST /goals/{id}/links` · `DELETE /goals/{id}/links/{kind}/{ref_id}` · `GET /goals/for/{kind}/{ref_id}` |
 | Misiones y recompensas | `GET /game/wallet` · `POST /game/freezes/buy` · `GET /game/missions` · `POST /game/missions/{key}/claim` · `GET/POST /game/rewards` · `PUT/DELETE /game/rewards/{id}` · `POST /game/rewards/{id}/redeem` · `GET /game/coins/history` · `DELETE /game/coins/{id}` |
 | Papelera | `GET/DELETE /trash` · `POST /trash/{note\|task}/{id}/restore` · `DELETE /trash/{note\|task}/{id}` |
 | Notas | `GET/POST /notes` · `GET/PUT/DELETE /notes/{id}` · `GET /notes/by-title/{título}` · `POST /notes/daily` · `GET /notes/graph` · `GET /notes/tags` · `GET /notes/checklist` · `PATCH /notes/{id}/checklist` · `GET /notes/export` · `POST /notes/import` |

@@ -1,7 +1,7 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../core/api.service';
-import { DIFFICULTY_LABEL, Goal, ReviewTask, WeeklyReview, XP_KIND_LABEL, XpKind } from '../core/models';
+import { DIFFICULTY_LABEL, WeekGoal, ReviewTask, WeeklyReview, XP_KIND_LABEL, XpKind } from '../core/models';
 import { ToastService } from '../core/toast.service';
 import { addDays, formatDay, parseDay, toDue, today } from '../core/util';
 import { BarListComponent, Bar } from '../shared/bar-list.component';
@@ -158,7 +158,7 @@ export class ReviewComponent implements OnInit {
   busy = signal(false);
   /** Tareas ya resueltas en esta sesión (desaparecen de la lista sin recargar). */
   private handled = signal(new Set<number>());
-  goals: Goal[] = [];
+  goals: WeekGoal[] = [];
   reflection = '';
 
   rangeLabel = computed(() => {
@@ -199,7 +199,7 @@ export class ReviewComponent implements OnInit {
     });
   }
 
-  private cleanGoals(): Goal[] { return this.goals.map(g => ({ text: g.text.trim(), done: g.done })).filter(g => g.text).slice(0, 5); }
+  private cleanGoals(): WeekGoal[] { return this.goals.map(g => ({ text: g.text.trim(), done: g.done })).filter(g => g.text).slice(0, 5); }
   save() {
     this.busy.set(true);
     this.api.saveReview(this.r()!.week_start, this.cleanGoals(), this.reflection).subscribe({

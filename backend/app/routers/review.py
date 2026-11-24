@@ -104,7 +104,7 @@ def summary(week: Optional[date] = Query(None, alias="week_start"), user: User =
     next_start = end + timedelta(days=1)
     upcoming = sum(1 for t in open_ if next_start <= (_aware(t.due_date).date() if t.all_day else _aware(t.due_date).astimezone(tz).date()) <= next_start + timedelta(days=6))
 
-    xp = {k: 0 for k in ("task", "habit", "focus", "review", "mission")}
+    xp = {k: 0 for k in ("task", "habit", "focus", "review", "mission", "goal")}
     for kind, amount in db.query(XpEvent.kind, func.sum(XpEvent.amount)).filter(
             XpEvent.user_id == user.id, XpEvent.created_at >= since, XpEvent.created_at < until).group_by(XpEvent.kind):
         xp["task" if kind == "subtask" else kind if kind in xp else "task"] += int(amount or 0)

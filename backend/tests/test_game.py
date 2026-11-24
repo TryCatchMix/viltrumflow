@@ -87,8 +87,8 @@ def test_profile_levels_and_history(client, auth):
     assert (p["xp"], p["level"], p["rank"], p["level_start_xp"], p["next_level_xp"]) == (320, 3, "Recluta", 300, 600)
 
     h = client.get(f"{G}/history", headers=auth, params={"days": 7}).json()
-    assert len(h["daily"]) == 7 and h["daily"][-1] == {"date": h["daily"][-1]["date"], "task": 320, "habit": 0, "focus": 0, "review": 0, "mission": 0, "total": 320}
-    assert h["by_kind"] == {"task": 320, "habit": 0, "focus": 0, "review": 0, "mission": 0} and h["today_xp"] == 320 and h["week_xp"] == 320
+    assert len(h["daily"]) == 7 and h["daily"][-1] == {"date": h["daily"][-1]["date"], "task": 320, "habit": 0, "focus": 0, "review": 0, "mission": 0, "goal": 0, "total": 320}
+    assert h["by_kind"] == {"task": 320, "habit": 0, "focus": 0, "review": 0, "mission": 0, "goal": 0} and h["today_xp"] == 320 and h["week_xp"] == 320
     assert h["recent"][0]["detail"] == "Épica 3" and h["recent"][0]["created_at"].endswith(("Z", "+00:00"))
     ach = {a["id"]: a for a in h["achievements"]}
     assert ach["first"]["unlocked"] and ach["epic"]["unlocked"] and not ach["tasks25"]["unlocked"] and ach["tasks25"]["progress"] == 4

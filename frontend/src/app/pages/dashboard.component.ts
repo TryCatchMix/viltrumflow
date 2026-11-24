@@ -3,7 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
-import { BOARD_STATUSES, Overview, PRIORITIES, PRIORITY_LABEL, STATUS_LABEL, Task } from '../core/models';
+import { BOARD_STATUSES, Goal, Overview, PRIORITIES, PRIORITY_LABEL, STATUS_LABEL, Task } from '../core/models';
 import { addDays, formatDay, isOverdue, parseDay, taskDay, today } from '../core/util';
 import { Bar, BarListComponent } from '../shared/bar-list.component';
 import { IconComponent } from '../shared/icon.component';
@@ -60,6 +60,10 @@ const SHORT = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' });
 
         <section class="card panel"><header><h2>Por estado</h2></header><app-bar-list [bars]="statusBars()" /></section>
         <section class="card panel"><header><h2>Abiertas por prioridad</h2></header><app-bar-list [bars]="priorityBars()" /></section>
+        <section class="card panel">
+          <header class="row"><h2>Objetivos en marcha</h2><span class="spacer"></span><a routerLink="/goals">Ver todos</a></header>
+          <app-bar-list [bars]="goalBars()" [progress]="true" empty="Aún no tienes objetivos a largo plazo" />
+        </section>
         <section class="card panel">
           <header class="row"><h2>Avance por proyecto</h2><span class="spacer"></span><a routerLink="/projects">Ver todos</a></header>
           <app-bar-list [bars]="projectBars()" [progress]="true" empty="Aún no hay proyectos" />
@@ -128,6 +132,11 @@ export class DashboardComponent implements OnInit {
   backlog = computed<Series[]>(() => [{ name: 'Abiertas', color: 'var(--series-1)', values: this.data()!.timeline.map(p => p.open) }]);
   statusBars = computed<Bar[]>(() => BOARD_STATUSES.map(s => ({ label: STATUS_LABEL[s], value: this.data()!.by_status[s] })));
   priorityBars = computed<Bar[]>(() => PRIORITIES.map(p => ({ label: PRIORITY_LABEL[p], value: this.data()!.by_priority[p] })));
+  goals = signal<Goal[]>([]);
+  goalBars = computed<Bar[]>(() => this.goals().slice(0, 6).map(g => ({
+    label: g.title, value: g.progress.percent ?? 0, total: 100, color: g.color, display: g.progress.percent === null ? '—' : `${g.progress.percent} %`,
+    hint: g.progress.expected !== null ? (g.progress.on_track ? 'A buen ritmo' : 'Con retraso') : undefined,
+  })));
   projectBars = computed<Bar[]>(() => this.data()!.projects.map(p => ({ label: p.name, value: p.completed, total: p.total, color: p.color })));
   /** Barra llena = estimación cumplida; en rojo si ya se ha superado. */
   timeBars = computed<Bar[]>(() => this.data()!.time_tracking.map(t => ({
@@ -146,5 +155,6 @@ export class DashboardComponent implements OnInit {
   private load() {
     this.api.overview(this.days()).subscribe(o => this.data.set(o));
     this.api.tasks().subscribe(t => this.tasks.set(t));
+    this.api.goals().subscribe({ next: g => this.goals.set(g), error: () => {} });
   }
 }

@@ -9,7 +9,7 @@ import { IconComponent } from '../shared/icon.component';
 import { RankInsigniaComponent } from '../shared/rank-insignia.component';
 
 const SHORT = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' });
-const KIND_ICON: Record<XpKind, string> = { task: 'check', habit: 'flame', focus: 'target', review: 'calendar', mission: 'flag' };
+const KIND_ICON: Record<XpKind, string> = { task: 'check', habit: 'flame', focus: 'target', review: 'calendar', mission: 'flag', goal: 'mountain' };
 
 @Component({
   selector: 'app-progress',
