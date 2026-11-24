@@ -66,11 +66,16 @@ export class LineChartComponent implements AfterViewInit, OnDestroy {
   seriesS = signal<Series[]>([]);
   @Input() set labels(v: string[]) { this.labelsS.set(v); }
   @Input() set series(v: Series[]) { this.seriesS.set(v); }
+  /** Escala fija (p. ej. 1-5): máximo del eje y marcas a mostrar. Sin ella, se calcula con los datos. */
+  @Input() set scale(v: { max: number; ticks: number[] } | null) { this.scaleS.set(v); }
+  private scaleS = signal<{ max: number; ticks: number[] } | null>(null);
 
   w = signal(600);
   hover = signal<{ i: number; x: number } | null>(null);
 
   private max = computed(() => {
+    const fixed = this.scaleS();
+    if (fixed) return fixed.max;
     const m = Math.max(1, ...this.seriesS().flatMap(s => s.values));
     const step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000].find(s => m / s <= 4) ?? Math.ceil(m / 4);
     return Math.ceil(m / step) * step;
@@ -81,7 +86,8 @@ export class LineChartComponent implements AfterViewInit, OnDestroy {
   };
   private y = (v: number) => M.t + (1 - v / this.max()) * (H - M.t - M.b);
 
-  yTicks = computed(() => [0, 1, 2, 3, 4].map(k => ({ v: (this.max() / 4) * k })).filter(t => Number.isInteger(t.v)).map(t => ({ ...t, y: this.y(t.v) })));
+  yTicks = computed(() => (this.scaleS()?.ticks.map(v => ({ v })) ?? [0, 1, 2, 3, 4].map(k => ({ v: (this.max() / 4) * k })))
+    .filter(t => Number.isInteger(t.v)).map(t => ({ ...t, y: this.y(t.v) })));
   xTicks = computed(() => {
     const n = this.labelsS().length;
     const count = Math.max(2, Math.min(7, Math.floor((this.w() - M.l - M.r) / 80)));

@@ -182,3 +182,24 @@ export interface GoalDetail extends Goal {
   xp_gained?: number;
 }
 export type GoalLinkKind = 'project' | 'task' | 'habit';
+
+// ---------- Diario de ánimo y energía ----------
+export interface MoodEntry { day: string; mood: number; energy: number; factors: string[]; note?: string | null; }
+export interface MoodFactor { key: string; label: string; }
+export interface MoodLog { today: string; entry_today: MoodEntry | null; entries: MoodEntry[]; factors: MoodFactor[]; }
+export interface MoodBand { days: number; tasks: number | null; habits: number | null; focus: number | null; }
+export interface MoodInsights {
+  days: number; logged: number; streak: number; avg_mood: number | null; avg_energy: number | null;
+  by_mood: { low: MoodBand; mid: MoodBand; high: MoodBand }; by_energy: { low: MoodBand; mid: MoodBand; high: MoodBand };
+  correlations: { mood_tasks: number | null; energy_tasks: number | null; energy_focus: number | null; mood_habits: number | null };
+  weekdays: { weekday: number; days: number; mood: number | null; energy: number | null }[];
+  hours: { tasks: number[]; focus: number[] };
+  factors: { key: string; label: string; days: number; mood_with: number; mood_without: number; energy_with: number; energy_without: number }[];
+}
+export const MOOD_LEVELS = [
+  { v: 1, emoji: '😞', label: 'Muy mal' }, { v: 2, emoji: '🙁', label: 'Mal' }, { v: 3, emoji: '😐', label: 'Normal' },
+  { v: 4, emoji: '🙂', label: 'Bien' }, { v: 5, emoji: '😄', label: 'Genial' },
+];
+export const ENERGY_LEVELS = [
+  { v: 1, label: 'Muy baja' }, { v: 2, label: 'Baja' }, { v: 3, label: 'Normal' }, { v: 4, label: 'Alta' }, { v: 5, label: 'A tope' },
+];
