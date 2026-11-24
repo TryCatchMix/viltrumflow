@@ -15,7 +15,7 @@ from .habits import MAX_FREEZES, apply_freezes, best_streak, checks_by_habit, do
 
 router = APIRouter()
 
-KIND = {"task": "task", "subtask": "task", "habit": "habit", "focus": "focus", "review": "review", "mission": "mission"}
+KIND = {"task": "task", "subtask": "task", "habit": "habit", "focus": "focus", "review": "review", "mission": "mission", "goal": "goal"}
 
 
 @router.get("/profile")
@@ -32,6 +32,7 @@ def _achievements(db: Session, user: User) -> list:
     blocks = db.query(func.count(PomodoroSession.id)).filter(PomodoroSession.user_id == user.id).scalar()
     reviews = db.query(func.count(XpEvent.id)).filter(XpEvent.user_id == user.id, XpEvent.kind == "review").scalar()
     missions = db.query(func.count(XpEvent.id)).filter(XpEvent.user_id == user.id, XpEvent.kind == "mission").scalar()
+    goals = db.query(func.count(XpEvent.id)).filter(XpEvent.user_id == user.id, XpEvent.kind == "goal").scalar()
     redeemed = db.query(func.count(CoinEntry.id)).filter(CoinEntry.user_id == user.id, CoinEntry.reason == "reward").scalar()
     today = local_today(user)
     streak = 0
@@ -52,6 +53,8 @@ def _achievements(db: Session, user: User) -> list:
         ("review4", "Estratega", "Completa 4 revisiones semanales", reviews, 4),
         ("missions10", "Mercenario del Imperio", "Completa 10 misiones semanales", missions, 10),
         ("reward1", "Botín merecido", "Canjea tu primera recompensa", redeemed, 1),
+        ("goal1", "Objetivo cumplido", "Cumple tu primer objetivo a largo plazo", goals, 1),
+        ("goal5", "Visión imperial", "Cumple 5 objetivos a largo plazo", goals, 5),
     ]
     return [{"id": i, "name": n, "description": d, "progress": min(int(p or 0), g), "goal": g, "unlocked": (p or 0) >= g}
             for i, n, d, p, g in defs]
@@ -64,8 +67,8 @@ def history(days: int = Query(30, ge=7, le=180), user: User = Depends(get_curren
     today = datetime.now(timezone.utc).astimezone(tz).date()
     start = today - timedelta(days=days - 1)
     events = db.query(XpEvent).filter(XpEvent.user_id == user.id).order_by(XpEvent.created_at.desc(), XpEvent.id.desc()).all()
-    per_day = defaultdict(lambda: {"task": 0, "habit": 0, "focus": 0, "review": 0, "mission": 0})
-    totals = {"task": 0, "habit": 0, "focus": 0, "review": 0, "mission": 0}
+    per_day = defaultdict(lambda: {"task": 0, "habit": 0, "focus": 0, "review": 0, "mission": 0, "goal": 0})
+    totals = {"task": 0, "habit": 0, "focus": 0, "review": 0, "mission": 0, "goal": 0}
     for e in events:
         k = KIND.get(e.kind, "task")
         totals[k] += e.amount

@@ -363,6 +363,57 @@ class Reward(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class Goal(TimestampMixin, Base):
+    """Objetivo a largo plazo: agrupa proyectos, tareas y rutinas, y mide el avance hacia él."""
+
+    __tablename__ = "goals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    color: Mapped[str] = mapped_column(String(7), default="#7c5cff")
+    deadline: Mapped[Optional[date]] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(10), default="active")  # active | done | archived
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    milestones: Mapped[List["GoalMilestone"]] = relationship(
+        back_populates="goal", cascade="all, delete-orphan", order_by="GoalMilestone.position"
+    )
+    links: Mapped[List["GoalLink"]] = relationship(back_populates="goal", cascade="all, delete-orphan")
+
+
+class GoalMilestone(Base):
+    """Hito de un objetivo: un paso que se marca a mano y cuenta en el avance como una tarea."""
+
+    __tablename__ = "goal_milestones"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    goal_id: Mapped[int] = mapped_column(ForeignKey("goals.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    done: Mapped[bool] = mapped_column(Boolean, default=False)
+    done_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+
+    goal: Mapped[Goal] = relationship(back_populates="milestones")
+
+
+class GoalLink(Base):
+    """Proyecto, tarea o rutina que empuja hacia un objetivo. Es del objetivo (de su dueño), no del proyecto,
+    así que cada miembro de un proyecto compartido puede ligarlo a sus propios objetivos."""
+
+    __tablename__ = "goal_links"
+    __table_args__ = (UniqueConstraint("goal_id", "kind", "ref_id", name="uq_goal_link"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    goal_id: Mapped[int] = mapped_column(ForeignKey("goals.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(10))  # project | task | habit
+    ref_id: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    goal: Mapped[Goal] = relationship(back_populates="links")
+
+
 class XpEvent(Base):
     """Experiencia ganada. (kind, ref) es único: una misma tarea o check no puntúa dos veces."""
 
