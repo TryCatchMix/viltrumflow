@@ -159,7 +159,9 @@ export class ShellComponent implements OnInit, OnDestroy {
   links = [
     { path: '/dashboard', icon: 'home', label: 'Inicio' },
     { path: '/today', icon: 'sun', label: 'Hoy' },
+    { path: '/plan', icon: 'pin', label: 'Plan del día' },
     { path: '/tasks', icon: 'check', label: 'Tareas' },
+    { path: '/lists', icon: 'list', label: 'Listas' },
     { path: '/kanban', icon: 'board', label: 'Tablero' },
     { path: '/calendar', icon: 'calendar', label: 'Calendario' },
     { path: '/projects', icon: 'folder', label: 'Proyectos' },

@@ -27,6 +27,10 @@ notas Markdown con `[[enlaces]]` al estilo Obsidian, vista de grafo y panel con 
 | **Estadísticas de rutinas** | Qué se cumple y qué no día a día, porcentaje, rachas, a qué hora se marcan, puntualidad frente a la hora prevista y cumplimiento por día de la semana |
 | **Pomodoro** | Reloj configurable (concentración, descansos, bloques por serie, inicio automático, sonido y aviso); cada bloque suma tiempo a la tarea elegida |
 | **Progreso** | Experiencia por tareas, rutinas y concentración; niveles, diez rangos del Imperio, logros y gráficos |
+| **Plan del día** | Ritual de inicio (3 prioridades, intención, horario) y de cierre (lo hecho, lo pendiente a mañana, ánimo y reflexión) |
+| **Resumen de la mañana** | Aviso a la hora elegida con las tareas de hoy, las atrasadas y las rutinas, que lleva a planificar el día |
+| **Listas reutilizables** | Compra, maleta, «antes de salir»…: marcar, quitar lo comprado o desmarcar todo, «lo de siempre» y listas compartidas |
+| **Captura por voz** | Micrófono en Tareas, Hoy, Plan del día y Listas: «llamar al dentista mañana a las diez y media prioridad alta» |
 | **Plantillas de proyecto** | Proyectos con sus tareas y subtareas ya hechas («Mudanza», «Preparar un examen», «Viaje»…) y fechas relativas al día de inicio; guarda los tuyos como plantilla |
 | **Objetivos a largo plazo** | Metas con fecha límite que agrupan proyectos, tareas, rutinas e hitos; avance, ritmo esperado y experiencia al cumplirlas |
 | **Diario de ánimo y energía** | Registro de diez segundos al día cruzado con tareas, rutinas y concentración: qué días y a qué horas rindes más y qué te influye |
@@ -224,6 +228,41 @@ Las correlaciones necesitan al menos 7 días registrados; con menos, no se sacan
   tiene registro, avisa una vez, en la app abierta y, si los tienes activados, con la app cerrada.
 - La **revisión semanal** muestra el ánimo medio de la semana y si ha subido o bajado respecto a la anterior.
 
+## Plan del día
+
+**Plan del día** (menú lateral, o el aviso «Empieza el día» en **Hoy**) es un ritual de dos minutos:
+
+- **Inicio**: eliges hasta **3 prioridades** entre lo que vence hoy, lo atrasado y el resto de tareas abiertas (o creas una
+  nueva, también por voz), escribes una **intención** opcional y colocas las tareas en el **planificador por horas**.
+  Las prioridades quedan fijadas arriba en **Hoy**, donde se marcan como hechas.
+- **Cierre** (se propone a partir de las 16:00): lo completado hoy y la experiencia ganada, cuántas prioridades
+  cumpliste, lo pendiente con una casilla para **pasarlo a mañana** (conserva la hora; lo marcado como «Hecha» no se
+  mueve), el registro de ánimo y una reflexión. Al cerrar, propone **dejar listo mañana**.
+- Se cuenta la racha de días seguidos planificando.
+
+**Resumen de la mañana** (Ajustes → Recordatorios y avisos): a la hora elegida (de 5:00 a 12:00) llega «Buenos días ☀️ ·
+Hoy: 4 tareas (1 importante) · 2 atrasadas · 3 rutinas. Elige tus 3 prioridades.», que abre el plan del día (o **Hoy**,
+si ya está hecho). Llega con la app abierta y, si los tienes activados, también cerrada. «Ver cómo sería hoy» muestra
+el texto al momento.
+
+## Listas reutilizables
+
+**Listas** (menú lateral) es para lo que se repite. Al crear una puedes partir de **Compra**, **Maleta** o **Antes de
+salir de casa**, o de una vacía.
+
+- Añade varios elementos a la vez separándolos por comas («leche, pan, huevos») o díctalos («tomates, cebollas y pimientos»).
+- **Quitar lo marcado** (la compra): lo marcado sale de la lista y pasa a **Lo de siempre**, ordenado por lo que más
+  usas, para volver a añadirlo con un toque. **Desmarcar todo** (la maleta): todo vuelve a estar por hacer.
+- **Compartir**: invita por nombre de usuario o email; quien entra puede ver, añadir y marcar (la lista se refresca sola
+  cada 20 segundos). Se puede consultar sin conexión.
+
+## Captura por voz
+
+El botón de micrófono (en navegadores con reconocimiento de voz: Chrome, Edge, Android; Safari desde iOS 14.5) aparece
+en Tareas, Hoy, Plan del día y Listas. Lo dicho se convierte al formato de la captura rápida: «a las diez y media» →
+10:30, «menos cuarto», «de la tarde», «prioridad alta» / «es urgente» / «importante», «etiqueta trabajo» → `#trabajo`,
+«en el proyecto web» → `@web`, «durante 45 minutos» → estimación. Se muestra antes de crearla para corregir lo que haga falta.
+
 ## Plantillas de proyecto
 
 En **Proyectos → Desde plantilla** eliges una plantilla, el nombre, el **día de inicio** y, si quieres, un objetivo al
@@ -408,6 +447,8 @@ Todas las rutas cuelgan de `/api/v1` y, salvo registro e inicio de sesión, requ
 | Rutinas | `GET/POST /habits` · `PUT/DELETE /habits/{id}` · `GET /habits/day` · `PUT /habits/{id}/check` · `GET /habits/stats` |
 | Avisos push y revisión | `GET /push/key` · `POST /push/subscribe` · `POST /push/unsubscribe` · `POST /push/test` · `GET/PUT /review` · `POST /review/complete` · `GET /review/today` · `PUT /review/goal` |
 | Pomodoro y progreso | `GET/PUT /pomodoro/settings` · `POST /pomodoro/sessions` · `GET /pomodoro/stats` · `GET /game/profile` · `GET /game/history` |
+| Plan del día | `GET /day-plan` · `PUT /day-plan/{día}` · `POST /day-plan/{día}/close` · `GET /reminders/morning` |
+| Listas | `GET/POST /lists` · `GET/PUT/DELETE /lists/{id}` · `POST /lists/{id}/items` · `PATCH/DELETE /lists/items/{id}` · `POST /lists/{id}/uncheck-all` · `POST /lists/{id}/clear-checked` · `POST /lists/{id}/members` · `DELETE /lists/{id}/members/{usuario}` |
 | Plantillas de proyecto | `GET/POST /project-templates` · `PUT/DELETE /project-templates/{id}` · `POST /project-templates/from-project/{id}` · `POST /project-templates/apply` |
 | Diario | `GET /mood` · `PUT/DELETE /mood/{día}` · `GET /mood/insights` |
 | Objetivos | `GET/POST /goals` · `GET/PUT/DELETE /goals/{id}` · `POST /goals/{id}/complete` · `POST /goals/{id}/reopen` · `POST /goals/{id}/milestones` · `PUT/DELETE /goals/milestones/{id}` · `POST /goals/{id}/links` · `DELETE /goals/{id}/links/{kind}/{ref_id}` · `GET /goals/for/{kind}/{ref_id}` |

@@ -76,6 +76,10 @@ class User(TimestampMixin, Base):
     mood_reminder: Mapped[bool] = mapped_column(Boolean, default=False)
     mood_reminder_hour: Mapped[int] = mapped_column(Integer, default=21)
     last_mood_reminded_on: Mapped[Optional[date]] = mapped_column(Date)
+    # Resumen de la mañana (aviso): qué hay hoy y enlace al plan del día
+    morning_summary: Mapped[bool] = mapped_column(Boolean, default=False)
+    morning_summary_hour: Mapped[int] = mapped_column(Integer, default=8)
+    last_morning_summary_on: Mapped[Optional[date]] = mapped_column(Date)
     streak_freezes: Mapped[int] = mapped_column(Integer, default=0)
     freezes_checked_on: Mapped[Optional[date]] = mapped_column(Date)
 
@@ -365,6 +369,68 @@ class Reward(Base):
     repeatable: Mapped[bool] = mapped_column(Boolean, default=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ItemList(TimestampMixin, Base):
+    """Lista reutilizable (compra, maleta…): sus elementos se marcan y se vacía de un toque; se puede compartir."""
+
+    __tablename__ = "item_lists"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    emoji: Mapped[str] = mapped_column(String(16), default="")
+    color: Mapped[str] = mapped_column(String(7), default="#7c5cff")
+
+    owner: Mapped[User] = relationship()
+    items: Mapped[List["ListItem"]] = relationship(back_populates="list", cascade="all, delete-orphan")
+    members: Mapped[List["ListMember"]] = relationship(back_populates="list", cascade="all, delete-orphan")
+
+
+class ListItem(Base):
+    """Elemento de una lista. Al quitarlo de la lista activa no se borra: se recuerda para sugerirlo (y cuántas veces se usó)."""
+
+    __tablename__ = "list_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    list_id: Mapped[int] = mapped_column(ForeignKey("item_lists.id", ondelete="CASCADE"), index=True)
+    text: Mapped[str] = mapped_column(String(200))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    checked: Mapped[bool] = mapped_column(Boolean, default=False)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    times_used: Mapped[int] = mapped_column(Integer, default=1)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    list: Mapped[ItemList] = relationship(back_populates="items")
+
+
+class ListMember(Base):
+    __tablename__ = "list_members"
+    __table_args__ = (UniqueConstraint("list_id", "user_id", name="uq_list_member"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    list_id: Mapped[int] = mapped_column(ForeignKey("item_lists.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    list: Mapped[ItemList] = relationship(back_populates="members")
+    user: Mapped[User] = relationship()
+
+
+class DayPlan(TimestampMixin, Base):
+    """Ritual del día: prioridades e intención por la mañana; cierre y reflexión por la noche."""
+
+    __tablename__ = "day_plans"
+    __table_args__ = (UniqueConstraint("user_id", "day", name="uq_day_plan_user_day"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column(Date)
+    priorities: Mapped[str] = mapped_column(String(100), default="")  # ids de tarea, en orden, separados por comas
+    intention: Mapped[Optional[str]] = mapped_column(String(300))
+    planned_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    reflection: Mapped[Optional[str]] = mapped_column(Text)
 
 
 class ProjectTemplate(TimestampMixin, Base):

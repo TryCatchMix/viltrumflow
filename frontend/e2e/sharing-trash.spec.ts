@@ -54,7 +54,10 @@ test('compartir un proyecto: permisos de lectura y edición, asignación y aviso
   // Ana la pasa a editora: ahora sí puede completarla
   await ana.page.goto('/projects');
   await ana.page.getByTitle('Compartir proyecto').click();
+  // Esperar a que el servidor guarde el cambio de permiso antes de que Bea recargue
+  const saved = ana.page.waitForResponse(r => r.request().method() === 'PUT' && /\/members\/\d+$/.test(r.url()) && r.ok());
   await ana.page.locator('.members select').selectOption('editor');
+  await saved;
   await expect(toast(ana.page)).toHaveCount(0);
   await bea.page.reload();
   await taskRow(bea.page, 'Preparar la demo').locator('.check').check();

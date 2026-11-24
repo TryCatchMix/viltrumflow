@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models import Habit, HabitCheck, MoodEntry, PushSubscription, ServerKey, Task, User
+from ..models import DayPlan, Habit, HabitCheck, MoodEntry, PushSubscription, ServerKey, Status, Task, User
 from . import access
 from .reminders import due_reminders, user_tz
 
@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 HABIT_WINDOW = timedelta(hours=3)  # pasado este margen tras la hora prevista ya no se avisa (sería tarde)
 MOOD_TITLE = "¿Cómo ha ido el día?"
+MORNING_WINDOW = timedelta(hours=4)  # si el servidor estuvo parado, el resumen aún llega dentro de este margen
 
 
 # ---------- Recolección de avisos ----------
@@ -41,7 +42,65 @@ def gather(db: Session, user: User, now: datetime) -> List[dict]:
         t.assigned_notified_at = now
     out += _habit_notices(db, user, now)
     out += _mood_notice(db, user, now)
+    out += _morning_notice(db, user, now)
     return out
+
+
+def _plural(n: int, one: str, many: str) -> str:
+    return f"{n} {one if n == 1 else many}"
+
+
+def morning_summary(db: Session, user: User, day: date) -> dict:
+    """Qué hay para el día: tareas (y cuántas urgentes), atrasadas, rutinas pendientes y si ya está planificado."""
+    from ..routers.habits import checks_by_habit, done_days, scheduled, week_count  # evita import circular
+
+    tz = user_tz(user)
+    tasks = db.query(Task).filter(
+        Task.deleted_at.is_(None), Task.parent_task_id.is_(None), Task.due_date.isnot(None),
+        Task.status.in_((Status.TODO, Status.IN_PROGRESS, Status.REVIEW)),
+        access.visible_tasks(db, user), access.responsible(user),
+    ).all()
+
+    def local_day(t: Task) -> date:
+        due = t.due_date if t.due_date.tzinfo else t.due_date.replace(tzinfo=timezone.utc)
+        return due.date() if t.all_day else due.astimezone(tz).date()
+
+    today_tasks = [t for t in tasks if local_day(t) == day]
+    overdue = sum(1 for t in tasks if local_day(t) < day)
+    important = sum(1 for t in today_tasks if t.priority.value in ("high", "urgent"))
+    habits = [h for h in db.query(Habit).filter(Habit.user_id == user.id, Habit.is_archived.is_(False)) if scheduled(h, day)]
+    checks = checks_by_habit(db, [h.id for h in habits])
+    pending_habits = 0
+    for h in habits:
+        done = done_days(h, checks[h.id])
+        if day not in done and not (h.weekly_target and week_count(done, day) >= h.weekly_target):
+            pending_habits += 1
+    planned = db.query(DayPlan.id).filter(DayPlan.user_id == user.id, DayPlan.day == day, DayPlan.planned_at.isnot(None)).first() is not None
+    parts = []
+    if today_tasks:
+        parts.append(_plural(len(today_tasks), "tarea", "tareas") + (f" ({_plural(important, 'importante', 'importantes')})" if important else ""))
+    if overdue:
+        parts.append(_plural(overdue, "atrasada", "atrasadas"))
+    if pending_habits:
+        parts.append(_plural(pending_habits, "rutina", "rutinas"))
+    body = ("Hoy: " + " · ".join(parts) + ".") if parts else "Hoy no tienes nada programado."
+    body += " Tu plan ya está listo." if planned else " Elige tus 3 prioridades."
+    return {"tasks": len(today_tasks), "important": important, "overdue": overdue, "habits": pending_habits,
+            "planned": planned, "body": body, "url": "/today" if planned else "/plan"}
+
+
+def _morning_notice(db: Session, user: User, now: datetime) -> List[dict]:
+    if not user.morning_summary:
+        return []
+    local = now.astimezone(user_tz(user))
+    today = local.date()
+    at = datetime.combine(today, time(user.morning_summary_hour or 8, 0), tzinfo=local.tzinfo)
+    if user.last_morning_summary_on == today or not (at <= local < at + MORNING_WINDOW):
+        return []
+    user.last_morning_summary_on = today
+    summary = morning_summary(db, user, today)
+    return [{"kind": "morning", "task_id": user.id, "title": summary["body"], "due_date": None, "all_day": False,
+             "by": summary["url"]}]
 
 
 def _mood_notice(db: Session, user: User, now: datetime) -> List[dict]:
@@ -154,6 +213,8 @@ def _message(n: dict, tz) -> dict:
         return payload("Nueva tarea asignada", n["title"] + (f" · {n['by']}" if n.get("by") else ""), "/tasks", f"vf-assigned-{n['task_id']}")
     if n["kind"] == "habit":
         return payload("Rutina pendiente", n["title"], "/today", f"vf-habit-{n['task_id']}")
+    if n["kind"] == "morning":
+        return payload("Buenos días ☀️", n["title"], n.get("by") or "/plan", "vf-morning")
     if n["kind"] == "mood":
         return payload(MOOD_TITLE, "Registra tu ánimo y energía en diez segundos.", "/today", "vf-mood")
     due = n["due_date"]
@@ -195,6 +256,8 @@ def _unmark(db: Session, notices: List[dict]) -> None:
             db.query(Task).filter(Task.id == n["task_id"]).update({"assigned_notified_at": None})
         elif n["kind"] == "mood":
             db.query(User).filter(User.id == n["task_id"]).update({"last_mood_reminded_on": None})
+        elif n["kind"] == "morning":
+            db.query(User).filter(User.id == n["task_id"]).update({"last_morning_summary_on": None})
         else:
             db.query(Habit).filter(Habit.id == n["task_id"]).update({"last_reminded_on": None})
     db.commit()

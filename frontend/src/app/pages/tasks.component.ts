@@ -10,6 +10,7 @@ import { hasMetadata } from '../core/quick-parse';
 import { quickToTask } from '../core/quick-task';
 import { addDays, formatDuration, formatDay, isOverdue, taskDay, taskTime, today } from '../core/util';
 import { IconComponent } from '../shared/icon.component';
+import { VoiceButtonComponent } from '../shared/voice-button.component';
 import { TaskDialogService } from '../shared/task-dialog.service';
 
 type Group = 'due' | 'status' | 'project' | 'priority' | 'none';
@@ -18,7 +19,7 @@ type Due = '' | 'overdue' | 'today' | 'week' | 'none';
 @Component({
   selector: 'app-tasks',
   standalone: true,
-  imports: [FormsModule, RouterLink, IconComponent],
+  imports: [FormsModule, RouterLink, IconComponent, VoiceButtonComponent],
   template: `
   <div class="page">
     <div class="page-head">
@@ -36,7 +37,9 @@ type Due = '' | 'overdue' | 'today' | 'week' | 'none';
       <form class="quick row" (ngSubmit)="quickAdd()">
         <app-icon name="plus" />
         <input name="quick" [(ngModel)]="quick" (ngModelChange)="onQuick($event)" maxlength="200" aria-label="Añadir tarea rápida"
-          placeholder="Añadir tarea: «Llamar a Juan mañana a las 10 ~15m #trabajo !alta»" />
+          placeholder="Añadir tarea: «Llamar a Juan mañana a las 10 ~15m #trabajo !alta»" #quickInput />
+        <app-voice-button (heard)="quick = $event; onQuick($event); quickInput.focus()" />
+        @if (quickText()) { <button class="btn sm primary">Añadir</button> }
       </form>
       @if (preview(); as q) {
         <div class="preview row" aria-live="polite">
@@ -172,7 +175,7 @@ export class TasksComponent implements OnInit {
   checks = signal<ChecklistItem[]>([]);
   loaded = signal(false);
   quick = '';
-  private quickText = signal('');
+  quickText = signal('');
   /** Se recalcula también cuando terminan de cargar los proyectos (para resolver «@proyecto»). */
   preview = computed(() => {
     const text = this.quickText().trim();

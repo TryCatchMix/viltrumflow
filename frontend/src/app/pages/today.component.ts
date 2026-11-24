@@ -3,7 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService } from '../core/api.service';
-import { ReviewToday, DIFFICULTY_LABEL, Habit, HabitDayItem, HabitInput, HabitState, HabitStats, PRIORITY_LABEL, Task, WEEKDAY_NAME, WEEKDAY_SHORT } from '../core/models';
+import { DayPlanState, ReviewToday, DIFFICULTY_LABEL, Habit, HabitDayItem, HabitInput, HabitState, HabitStats, PRIORITY_LABEL, Task, WEEKDAY_NAME, WEEKDAY_SHORT } from '../core/models';
 import { GameService } from '../core/game.service';
 import { ToastService } from '../core/toast.service';
 import { addDays, isOverdue, parseDay, taskDay, taskTime, toDue, today } from '../core/util';
@@ -11,6 +11,8 @@ import { Bar, BarListComponent } from '../shared/bar-list.component';
 import { ColumnChartComponent } from '../shared/column-chart.component';
 import { IconComponent } from '../shared/icon.component';
 import { MoodCheckinComponent } from '../shared/mood-checkin.component';
+import { VoiceButtonComponent } from '../shared/voice-button.component';
+import { quickToTask } from '../core/quick-task';
 import { LineChartComponent, Series } from '../shared/line-chart.component';
 import { TaskDialogService } from '../shared/task-dialog.service';
 
@@ -23,7 +25,7 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
 @Component({
   selector: 'app-today',
   standalone: true,
-  imports: [FormsModule, RouterLink, IconComponent, LineChartComponent, BarListComponent, ColumnChartComponent, MoodCheckinComponent],
+  imports: [FormsModule, RouterLink, IconComponent, LineChartComponent, BarListComponent, ColumnChartComponent, MoodCheckinComponent, VoiceButtonComponent],
   template: `
   <div class="page">
     <div class="page-head">
@@ -49,6 +51,26 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
       @if (info()?.pending_review && isToday()) {
         <a class="card banner row" routerLink="/review"><app-icon name="history" /><span><strong>Tu revisión semanal está pendiente.</strong>
           Cinco minutos para cerrar la semana y fijar objetivos.</span><span class="spacer"></span><span class="btn sm primary">Hacer revisión</span></a>
+      }
+      @if (isToday() && plan(); as pl) {
+        @if (!pl.planned_at) {
+          <a class="card banner row ritual" routerLink="/plan"><app-icon name="pin" /><span><strong>Empieza el día.</strong>
+            Elige tus 3 prioridades y organiza tus horas en dos minutos.</span><span class="spacer"></span><span class="btn sm primary">Planificar</span></a>
+        } @else {
+          <div class="card prios">
+            <div class="row head"><h2>Tus prioridades</h2>
+              @if (pl.intention) { <span class="muted intent">«{{ pl.intention }}»</span> }
+              <span class="spacer"></span>
+              @if (pl.closed_at) { <span class="chip">Día cerrado</span> }
+              @else if (evening()) { <a class="btn sm primary" routerLink="/plan" [queryParams]="{ mode: 'close' }">Cerrar el día</a> }
+              <a class="btn sm ghost" routerLink="/plan" [queryParams]="{ mode: 'start' }">Cambiar</a>
+            </div>
+            @for (t of pl.priorities; track t.id) {
+              <label class="row prio-item"><input type="checkbox" class="check" [checked]="t.status === 'completed'" (change)="togglePriority(t.id, $any($event.target).checked)" />
+                <span class="star" aria-hidden="true">★</span><span [class.done]="t.status === 'completed'">{{ t.title }}</span></label>
+            } @empty { <p class="muted small">Sin prioridades elegidas para hoy.</p> }
+          </div>
+        }
       }
       @if (isToday()) { <app-mood-checkin class="mood" /> }
       <div class="summary card row">
@@ -129,7 +151,9 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
         @if (isToday()) {
           <form class="item row add" (ngSubmit)="quickTask()">
             <app-icon name="plus" />
-            <input name="task" [(ngModel)]="newTask" placeholder="Añadir tarea para hoy" maxlength="200" aria-label="Añadir tarea para hoy" />
+            <input name="task" [(ngModel)]="newTask" placeholder="Añadir tarea para hoy (admite «a las 17:00 !alta»)" maxlength="200" aria-label="Añadir tarea para hoy" #todayInput />
+            <app-voice-button (heard)="newTask = $event; todayInput.focus()" />
+            @if (newTask.trim()) { <button class="btn sm primary">Añadir</button> }
           </form>
         }
       </div>
@@ -277,6 +301,12 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
   }`,
   styles: [`
     .mood { margin-bottom: 12px; }
+    .ritual { margin-bottom: 12px; }
+    .prios { padding: 14px 16px; margin-bottom: 12px; display: grid; gap: 6px;
+      .head { gap: 10px; flex-wrap: wrap; align-items: center; h2 { margin: 0; font-size: 15px; } }
+      .intent { font-size: 13px; font-style: italic; } .star { color: var(--warning); } .small { font-size: 12.5px; margin: 0; }
+      .done { text-decoration: line-through; color: var(--text-muted); } }
+    .prio-item { gap: 8px; align-items: center; padding: 3px 0; cursor: pointer; }
     .cap::first-letter { text-transform: uppercase; }
     .banner { padding: 12px 16px; gap: 12px; margin-bottom: 12px; color: var(--text); border-color: var(--accent); background: var(--accent-soft); &:hover { text-decoration: none; } span { font-size: 13.5px; } }
     .frost { border-color: var(--series-1); background: color-mix(in srgb, var(--series-1) 12%, var(--surface)); app-icon { color: var(--series-1); } }
@@ -389,11 +419,18 @@ export class TodayComponent implements OnInit {
   });
 
   constructor() {
-    this.api.tasksChanged.pipe(takeUntilDestroyed()).subscribe(() => this.loadTasks());
+    this.api.tasksChanged.pipe(takeUntilDestroyed()).subscribe(() => { this.loadTasks(); this.loadPlan(); });
     const tab = this.route.snapshot.queryParamMap.get('tab');
     if (tab === 'stats' || tab === 'manage') this.tab.set(tab);
   }
-  ngOnInit() { this.loadDay(); this.loadTasks(); this.api.reviewToday().subscribe({ next: i => this.info.set(i), error: () => {} }); if (this.tab() !== 'day') this.setTab(this.tab()); }
+  plan = signal<DayPlanState | null>(null);
+  evening = () => new Date().getHours() >= 16;
+  private loadPlan() { this.api.dayPlan().subscribe({ next: p => this.plan.set(p), error: () => {} }); }
+  togglePriority(id: number, done: boolean) {
+    this.api.updateTask(id, { status: done ? 'completed' : 'todo' }).subscribe({ next: () => this.api.xpChanged.next(), error: e => { this.toast.error(e); this.loadPlan(); } });
+  }
+
+  ngOnInit() { this.loadPlan(); this.loadDay(); this.loadTasks(); this.api.reviewToday().subscribe({ next: i => this.info.set(i), error: () => {} }); if (this.tab() !== 'day') this.setTab(this.tab()); }
 
   time = (iso: string) => new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
   dayNum = (d: string) => parseDay(d).getDate();
@@ -454,10 +491,13 @@ export class TodayComponent implements OnInit {
     this.api.createHabit({ title }).subscribe({ next: () => this.loadDay(), error: e => { this.newHabit = title; this.toast.error(e); } });
   }
   quickTask() {
-    const title = this.newTask.trim();
-    if (!title) return;
+    const text = this.newTask.trim();
+    if (!text) return;
     this.newTask = '';
-    this.api.createTask({ title, ...toDue(this.todayStr, '') }).subscribe({ error: e => { this.newTask = title; this.toast.error(e); } });
+    // Misma interpretación que la captura rápida («a las 17:00 !alta #casa»); sin fecha en el texto, es para hoy
+    const { input, parsed } = quickToTask(text, []);
+    const task = parsed.day ? input : { ...input, ...toDue(this.todayStr, parsed.time ?? '') };
+    this.api.createTask(task).subscribe({ error: e => { this.newTask = text; this.toast.error(e); } });
   }
 
   // ---- Gestión ----

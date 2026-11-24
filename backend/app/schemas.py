@@ -70,6 +70,8 @@ class UserUpdate(BaseModel):
     digest_hour: Optional[int] = Field(None, ge=0, le=23)
     mood_reminder: Optional[bool] = None
     mood_reminder_hour: Optional[int] = Field(None, ge=12, le=23)
+    morning_summary: Optional[bool] = None
+    morning_summary_hour: Optional[int] = Field(None, ge=5, le=12)
 
     @field_validator("timezone")
     @classmethod
@@ -107,6 +109,8 @@ class UserOut(ORM):
     digest_hour: int
     mood_reminder: bool = False
     mood_reminder_hour: int = 21
+    morning_summary: bool = False
+    morning_summary_hour: int = 8
     created_at: datetime
     last_login: Optional[datetime] = None
     has_password: bool = True
@@ -451,12 +455,12 @@ class ImportResult(BaseModel):
 
 # ---------- Recordatorios ----------
 class ReminderOut(Out):
-    kind: Literal["reminder", "assigned", "habit", "mood"] = "reminder"
+    kind: Literal["reminder", "assigned", "habit", "mood", "morning"] = "reminder"
     task_id: int
     title: str
     due_date: Optional[datetime] = None
     all_day: bool = True
-    by: Optional[str] = None  # quién asignó la tarea
+    by: Optional[str] = None  # quién asignó la tarea; en el resumen de la mañana, la página a abrir
 
 
 # ---------- Papelera ----------

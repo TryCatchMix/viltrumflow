@@ -114,3 +114,22 @@ test('progreso: experiencia según dificultad, subida de nivel y rangos', async 
   await expect(page.getByRole('alertdialog')).toContainText('Nuevo rango');
   await expect(page.getByRole('alertdialog').locator('h2')).toHaveText('Recluta');
 });
+
+test.describe(() => {
+  // Con el service worker activo, sus peticiones no pasarían por page.route
+  test.use({ serviceWorkers: 'block' });
+
+  test('pomodoro: si los ajustes llegan tarde del servidor no pisan lo que estás escribiendo', async ({ browser }) => {
+    const { page } = await register(browser, 'pomlate');
+    await page.route('**/api/v1/pomodoro/settings', async r => {
+      if (r.request().method() !== 'GET') return r.continue();
+      await new Promise(res => setTimeout(res, 1500));
+      await r.continue();
+    });
+    await page.goto('/focus');
+    await page.locator('input[name=focus]').fill('7');
+    await page.waitForResponse(r => r.url().endsWith('/pomodoro/settings') && r.request().method() === 'GET');
+    await page.waitForTimeout(200);
+    await expect(page.locator('input[name=focus]')).toHaveValue('7');
+  });
+});
