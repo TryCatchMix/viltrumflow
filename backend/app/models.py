@@ -414,6 +414,21 @@ class GoalLink(Base):
     goal: Mapped[Goal] = relationship(back_populates="links")
 
 
+class MoodEntry(TimestampMixin, Base):
+    """Registro diario de ánimo y energía (1-5), con factores opcionales y una nota."""
+
+    __tablename__ = "mood_entries"
+    __table_args__ = (UniqueConstraint("user_id", "day", name="uq_mood_user_day"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column(Date)  # día local del usuario
+    mood: Mapped[int] = mapped_column(Integer)
+    energy: Mapped[int] = mapped_column(Integer)
+    factors: Mapped[str] = mapped_column(String(300), default="")  # claves separadas por comas
+    note: Mapped[Optional[str]] = mapped_column(Text)
+
+
 class XpEvent(Base):
     """Experiencia ganada. (kind, ref) es único: una misma tarea o check no puntúa dos veces."""
 

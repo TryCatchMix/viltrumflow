@@ -10,6 +10,7 @@ import { addDays, isOverdue, parseDay, taskDay, taskTime, toDue, today } from '.
 import { Bar, BarListComponent } from '../shared/bar-list.component';
 import { ColumnChartComponent } from '../shared/column-chart.component';
 import { IconComponent } from '../shared/icon.component';
+import { MoodCheckinComponent } from '../shared/mood-checkin.component';
 import { LineChartComponent, Series } from '../shared/line-chart.component';
 import { TaskDialogService } from '../shared/task-dialog.service';
 
@@ -22,7 +23,7 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
 @Component({
   selector: 'app-today',
   standalone: true,
-  imports: [FormsModule, RouterLink, IconComponent, LineChartComponent, BarListComponent, ColumnChartComponent],
+  imports: [FormsModule, RouterLink, IconComponent, LineChartComponent, BarListComponent, ColumnChartComponent, MoodCheckinComponent],
   template: `
   <div class="page">
     <div class="page-head">
@@ -49,6 +50,7 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
         <a class="card banner row" routerLink="/review"><app-icon name="history" /><span><strong>Tu revisión semanal está pendiente.</strong>
           Cinco minutos para cerrar la semana y fijar objetivos.</span><span class="spacer"></span><span class="btn sm primary">Hacer revisión</span></a>
       }
+      @if (isToday()) { <app-mood-checkin class="mood" /> }
       <div class="summary card row">
         <svg viewBox="0 0 44 44" width="56" height="56" role="img" [attr.aria-label]="done() + ' de ' + total() + ' completado'">
           <circle cx="22" cy="22" r="18" fill="none" stroke="var(--surface-3)" stroke-width="5" />
@@ -274,6 +276,7 @@ const clock = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2,
     </div>
   }`,
   styles: [`
+    .mood { margin-bottom: 12px; }
     .cap::first-letter { text-transform: uppercase; }
     .banner { padding: 12px 16px; gap: 12px; margin-bottom: 12px; color: var(--text); border-color: var(--accent); background: var(--accent-soft); &:hover { text-decoration: none; } span { font-size: 13.5px; } }
     .frost { border-color: var(--series-1); background: color-mix(in srgb, var(--series-1) 12%, var(--surface)); app-icon { color: var(--series-1); } }

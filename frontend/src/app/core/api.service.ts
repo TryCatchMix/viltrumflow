@@ -5,7 +5,7 @@ import { map, tap } from 'rxjs/operators';
 import { Outbox, asNote, asTask } from './outbox';
 import { environment } from '../../environments/environment';
 import {
-  CoinEntry, Missions, RewardItem, Wallet, GameHistory, GameProfile, Goal, GoalDetail, GoalLinkKind, GoalStatus, WeekGoal, ReviewToday, WeeklyReview, Habit, HabitDayItem, HabitInput, HabitStats, PomodoroSettings, PomodoroStats,
+  CoinEntry, Missions, RewardItem, Wallet, GameHistory, GameProfile, Goal, GoalDetail, GoalLinkKind, GoalStatus, WeekGoal, MoodEntry, MoodInsights, MoodLog, ReviewToday, WeeklyReview, Habit, HabitDayItem, HabitInput, HabitStats, PomodoroSettings, PomodoroStats,
   CalendarEvent, CalendarInfo, CalendarStatus, ChecklistItem, Mention, NoteVersion, Comment, Graph, ImportResult, Member, Note, NoteSummary, Overview, Project,
   Reminder, Role, SearchResult, TrashItem, Status, TagCount, Task, TaskInput,
 } from './models';
@@ -31,6 +31,7 @@ export class ApiService {
   readonly notesChanged = new Subject<void>();
   /** La experiencia puede haber cambiado (rutina marcada); las tareas avisan por `tasksChanged`. */
   readonly xpChanged = new Subject<void>();
+  readonly moodChanged = new Subject<void>();
   private t = <T>(o: Observable<T>) => o.pipe(tap(() => this.tasksChanged.next()));
   private n = <T>(o: Observable<T>) => o.pipe(tap(() => this.notesChanged.next()));
 
@@ -178,6 +179,14 @@ export class ApiService {
   }
   reviewToday() { return this.http.get<ReviewToday>(`${this.base}/review/today`); }
   toggleGoal(week_start: string, index: number, done: boolean) { return this.http.put<void>(`${this.base}/review/goal`, { week_start, index, done }); }
+
+  // Diario de ánimo y energía
+  moodLog(days = 90) { return this.http.get<MoodLog>(`${this.base}/mood`, { params: params({ days }) }); }
+  saveMood(day: string, data: { mood: number; energy: number; factors: string[]; note?: string | null }) {
+    return this.http.put<MoodEntry>(`${this.base}/mood/${day}`, data).pipe(tap(() => this.moodChanged.next()));
+  }
+  deleteMood(day: string) { return this.http.delete<void>(`${this.base}/mood/${day}`).pipe(tap(() => this.moodChanged.next())); }
+  moodInsights(days = 30) { return this.http.get<MoodInsights>(`${this.base}/mood/insights`, { params: params({ days }) }); }
 
   // Objetivos a largo plazo
   goals(status: GoalStatus | 'all' = 'active') { return this.http.get<Goal[]>(`${this.base}/goals`, { params: params({ status }) }); }

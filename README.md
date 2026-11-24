@@ -28,6 +28,7 @@ notas Markdown con `[[enlaces]]` al estilo Obsidian, vista de grafo y panel con 
 | **Pomodoro** | Reloj configurable (concentración, descansos, bloques por serie, inicio automático, sonido y aviso); cada bloque suma tiempo a la tarea elegida |
 | **Progreso** | Experiencia por tareas, rutinas y concentración; niveles, diez rangos del Imperio, logros y gráficos |
 | **Objetivos a largo plazo** | Metas con fecha límite que agrupan proyectos, tareas, rutinas e hitos; avance, ritmo esperado y experiencia al cumplirlas |
+| **Diario de ánimo y energía** | Registro de diez segundos al día cruzado con tareas, rutinas y concentración: qué días y a qué horas rindes más y qué te influye |
 | **Compartir desde el móvil** | Con la app instalada, ViltrumFlow aparece en el menú «Compartir» de Android: lo compartido se guarda como nota o tarea |
 | **Misiones y recompensas** | Tres misiones semanales con experiencia y monedas, protector de racha y premios propios que se canjean con monedas |
 | **Tareas** | Alta rápida, subtareas, comentarios, prioridad, etiquetas, fecha con o sin hora, filtros y agrupación |
@@ -201,6 +202,23 @@ En **Objetivos** (menú lateral) defines metas como «Aprobar las oposiciones» 
   «Visión imperial». Reabrirlo o eliminarlo retira esa experiencia.
 - Los objetivos en marcha aparecen también en **Inicio**.
 
+## Diario de ánimo y energía
+
+En **Hoy** (y en **Diario**, en el menú lateral) aparece «¿Cómo estás hoy?»: ánimo y energía del 1 al 5, factores
+opcionales («Dormí bien», «Ejercicio», «Estrés»…) y una nota. Se puede cambiar durante el día y rellenar un día
+olvidado hasta un mes atrás. Es privado: nadie más lo ve, ni siquiera en proyectos compartidos.
+
+La página **Diario** (30, 90 o 180 días) cruza esos registros con lo que haces cada día:
+
+- **Lo que dicen tus datos**: conclusiones en frases, solo cuando hay datos suficientes (por ejemplo, «Los días de
+  energía alta completas 4,2 tareas de media; los de energía baja, 2»).
+- Evolución del ánimo y la energía, calendario de ánimo y ánimo medio por día de la semana.
+- Tareas completadas, rutinas cumplidas y minutos de enfoque según tu energía y tu ánimo (alta, normal, baja).
+- **A qué horas rindes más**: tareas completadas y minutos de concentración por hora del día.
+- **Qué te influye**: ánimo y energía los días con y sin cada factor (con al menos 3 días de cada).
+
+Las correlaciones necesitan al menos 7 días registrados; con menos, no se sacan conclusiones de ellas.
+
 ## Compartir desde el móvil
 
 Con ViltrumFlow instalada (ver *Uso sin conexión*), en Android aparece en el menú **Compartir** de cualquier app.
@@ -373,6 +391,7 @@ Todas las rutas cuelgan de `/api/v1` y, salvo registro e inicio de sesión, requ
 | Rutinas | `GET/POST /habits` · `PUT/DELETE /habits/{id}` · `GET /habits/day` · `PUT /habits/{id}/check` · `GET /habits/stats` |
 | Avisos push y revisión | `GET /push/key` · `POST /push/subscribe` · `POST /push/unsubscribe` · `POST /push/test` · `GET/PUT /review` · `POST /review/complete` · `GET /review/today` · `PUT /review/goal` |
 | Pomodoro y progreso | `GET/PUT /pomodoro/settings` · `POST /pomodoro/sessions` · `GET /pomodoro/stats` · `GET /game/profile` · `GET /game/history` |
+| Diario | `GET /mood` · `PUT/DELETE /mood/{día}` · `GET /mood/insights` |
 | Objetivos | `GET/POST /goals` · `GET/PUT/DELETE /goals/{id}` · `POST /goals/{id}/complete` · `POST /goals/{id}/reopen` · `POST /goals/{id}/milestones` · `PUT/DELETE /goals/milestones/{id}` · `POST /goals/{id}/links` · `DELETE /goals/{id}/links/{kind}/{ref_id}` · `GET /goals/for/{kind}/{ref_id}` |
 | Misiones y recompensas | `GET /game/wallet` · `POST /game/freezes/buy` · `GET /game/missions` · `POST /game/missions/{key}/claim` · `GET/POST /game/rewards` · `PUT/DELETE /game/rewards/{id}` · `POST /game/rewards/{id}/redeem` · `GET /game/coins/history` · `DELETE /game/coins/{id}` |
 | Papelera | `GET/DELETE /trash` · `POST /trash/{note\|task}/{id}/restore` · `DELETE /trash/{note\|task}/{id}` |
