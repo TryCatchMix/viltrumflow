@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
 
-export interface Bar { label: string; value: number; total?: number; color?: string; hint?: string; }
+export interface Bar { label: string; value: number; total?: number; color?: string; hint?: string; /** Texto en lugar del valor (p. ej. «40 %») */ display?: string; }
 
 /** Barras horizontales con etiqueta y valor siempre visibles. Con `total`, la barra muestra el avance sobre él. */
 @Component({
@@ -12,7 +12,7 @@ export interface Bar { label: string; value: number; total?: number; color?: str
     <div class="bar" [title]="b.hint ?? (b.total !== undefined ? b.value + ' de ' + b.total : b.label + ': ' + b.value)">
       <span class="label truncate">@if (b.color && dots) { <i [style.background]="b.color"></i> }{{ b.label }}</span>
       <span class="track"><span class="fill" [style.width.%]="pct(b)" [style.background]="progress ? (b.color || 'var(--series-1)') : 'var(--series-1)'"></span></span>
-      <span class="value">{{ b.total !== undefined ? b.value + '/' + b.total : b.value }}</span>
+      <span class="value">{{ b.display ?? (b.total !== undefined ? b.value + '/' + b.total : b.value) }}</span>
     </div>
   } @empty { <p class="muted">{{ empty }}</p> }`,
   styles: [`

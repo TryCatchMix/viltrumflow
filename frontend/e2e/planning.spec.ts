@@ -127,6 +127,8 @@ test('revisión semanal: reprogramar pendientes, fijar objetivos y verlos en Hoy
   // la revisión de la semana en curso (en la de la semana pasada no habría tareas completadas)
   const monday = madridDay(-((new Date(madridDay() + 'T12:00:00').getDay() + 6) % 7));
   await page.goto('/review');
+  // Antes de leer la semana mostrada, esperar a que cargue (si no, el rótulo aún está vacío)
+  await expect(page.locator('.page-head p')).toContainText('Del ');
   if (!(await page.locator('.page-head p').innerText()).includes(String(Number(monday.slice(8))))) {
     await page.getByRole('button', { name: 'Semana siguiente' }).click();
   }

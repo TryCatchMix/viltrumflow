@@ -5,7 +5,7 @@ import { map, tap } from 'rxjs/operators';
 import { Outbox, asNote, asTask } from './outbox';
 import { environment } from '../../environments/environment';
 import {
-  CoinEntry, Missions, RewardItem, Wallet, GameHistory, GameProfile, Goal, ReviewToday, WeeklyReview, Habit, HabitDayItem, HabitInput, HabitStats, PomodoroSettings, PomodoroStats,
+  CoinEntry, Missions, RewardItem, Wallet, GameHistory, GameProfile, Goal, GoalDetail, GoalLinkKind, GoalStatus, WeekGoal, ReviewToday, WeeklyReview, Habit, HabitDayItem, HabitInput, HabitStats, PomodoroSettings, PomodoroStats,
   CalendarEvent, CalendarInfo, CalendarStatus, ChecklistItem, Mention, NoteVersion, Comment, Graph, ImportResult, Member, Note, NoteSummary, Overview, Project,
   Reminder, Role, SearchResult, TrashItem, Status, TagCount, Task, TaskInput,
 } from './models';
@@ -172,12 +172,33 @@ export class ApiService {
 
   // Revisión semanal
   review(weekStart?: string) { return this.http.get<WeeklyReview>(`${this.base}/review`, { params: params({ week_start: weekStart }) }); }
-  saveReview(week_start: string, goals: Goal[], reflection: string) { return this.http.put(`${this.base}/review`, { week_start, goals, reflection }); }
-  completeReview(week_start: string, goals: Goal[], reflection: string) {
+  saveReview(week_start: string, goals: WeekGoal[], reflection: string) { return this.http.put(`${this.base}/review`, { week_start, goals, reflection }); }
+  completeReview(week_start: string, goals: WeekGoal[], reflection: string) {
     return this.http.post<{ xp_gained: number }>(`${this.base}/review/complete`, { week_start, goals, reflection }).pipe(tap(() => this.xpChanged.next()));
   }
   reviewToday() { return this.http.get<ReviewToday>(`${this.base}/review/today`); }
   toggleGoal(week_start: string, index: number, done: boolean) { return this.http.put<void>(`${this.base}/review/goal`, { week_start, index, done }); }
+
+  // Objetivos a largo plazo
+  goals(status: GoalStatus | 'all' = 'active') { return this.http.get<Goal[]>(`${this.base}/goals`, { params: params({ status }) }); }
+  goal(id: number) { return this.http.get<GoalDetail>(`${this.base}/goals/${id}`); }
+  createGoal(data: { title: string; deadline?: string | null; color?: string; description?: string | null }) {
+    return this.http.post<GoalDetail>(`${this.base}/goals`, data);
+  }
+  updateGoal(id: number, data: { title?: string; description?: string | null; color?: string; deadline?: string | null; archived?: boolean }) {
+    return this.http.put<GoalDetail>(`${this.base}/goals/${id}`, data);
+  }
+  deleteGoal(id: number) { return this.http.delete<void>(`${this.base}/goals/${id}`).pipe(tap(() => this.xpChanged.next())); }
+  completeGoal(id: number) { return this.http.post<GoalDetail>(`${this.base}/goals/${id}/complete`, null).pipe(tap(() => this.xpChanged.next())); }
+  reopenGoal(id: number) { return this.http.post<GoalDetail>(`${this.base}/goals/${id}/reopen`, null).pipe(tap(() => this.xpChanged.next())); }
+  addMilestone(goalId: number, title: string) { return this.http.post<GoalDetail>(`${this.base}/goals/${goalId}/milestones`, { title }); }
+  updateMilestone(id: number, data: { title?: string; done?: boolean }) { return this.http.put<GoalDetail>(`${this.base}/goals/milestones/${id}`, data); }
+  deleteMilestone(id: number) { return this.http.delete<GoalDetail>(`${this.base}/goals/milestones/${id}`); }
+  linkGoal(goalId: number, kind: GoalLinkKind, ref_id: number) { return this.http.post<GoalDetail>(`${this.base}/goals/${goalId}/links`, { kind, ref_id }); }
+  unlinkGoal(goalId: number, kind: GoalLinkKind, refId: number) { return this.http.delete<GoalDetail>(`${this.base}/goals/${goalId}/links/${kind}/${refId}`); }
+  goalsFor(kind: GoalLinkKind, refId: number) {
+    return this.http.get<{ id: number; title: string; color: string; status: GoalStatus }[]>(`${this.base}/goals/for/${kind}/${refId}`);
+  }
 
   // Misiones, monedas y recompensas
   wallet() { return this.http.get<Wallet>(`${this.base}/game/wallet`); }

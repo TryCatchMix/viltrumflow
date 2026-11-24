@@ -121,26 +121,27 @@ export interface PomodoroStats {
 }
 
 export interface ReviewTask { id: number; title: string; difficulty: number; priority: Priority; due_day: string | null; project: string | null; can_edit: boolean; }
-export interface Goal { text: string; done: boolean; }
+/** Meta de la semana (revisión semanal); no confundir con los objetivos a largo plazo. */
+export interface WeekGoal { text: string; done: boolean; }
 export interface WeeklyReview {
   week_start: string; week_end: string; is_current: boolean;
   completed: ReviewTask[]; carried_over: ReviewTask[]; no_date: ReviewTask[]; upcoming_next_week: number;
   xp: Record<XpKind, number>; xp_total: number; focus_minutes: number; notes_created: number;
   habits: { rate: number | null; done: number; scheduled: number; perfect_days: number;
     items: { id: number; title: string; color: string; rate: number | null; done: number; scheduled: number; period: 'day' | 'week'; streak: number }[] };
-  previous_goals: Goal[]; goals: Goal[]; reflection: string; completed_at: string | null; xp_reward: number;
+  previous_goals: WeekGoal[]; goals: WeekGoal[]; reflection: string; completed_at: string | null; xp_reward: number;
 }
-export interface ReviewToday { goals_week: string; goals: Goal[]; pending_review: string | null; }
+export interface ReviewToday { goals_week: string; goals: WeekGoal[]; pending_review: string | null; }
 
 export interface Rank { name: string; min_level: number; min_xp: number; }
 export interface GameProfile {
   xp: number; level: number; level_start_xp: number; next_level_xp: number; rank_index: number; rank: string;
   next_rank: string | null; next_rank_level: number | null; ranks: Rank[];
 }
-export type XpKind = 'task' | 'habit' | 'focus' | 'review' | 'mission';
-export const XP_KIND_LABEL: Record<XpKind, string> = { task: 'Tareas', habit: 'Rutinas', focus: 'Concentración', review: 'Revisión semanal', mission: 'Misiones' };
+export type XpKind = 'task' | 'habit' | 'focus' | 'review' | 'mission' | 'goal';
+export const XP_KIND_LABEL: Record<XpKind, string> = { task: 'Tareas', habit: 'Rutinas', focus: 'Concentración', review: 'Revisión semanal', mission: 'Misiones', goal: 'Objetivos' };
 export interface GameHistory {
-  daily: { date: string; task: number; habit: number; focus: number; review: number; mission: number; total: number }[];
+  daily: { date: string; task: number; habit: number; focus: number; review: number; mission: number; goal: number; total: number }[];
   by_kind: Record<XpKind, number>; today_xp: number; week_xp: number;
   recent: { kind: XpKind; amount: number; detail: string; created_at: string }[];
   achievements: { id: string; name: string; description: string; progress: number; goal: number; unlocked: boolean }[];
@@ -158,3 +159,26 @@ export interface Mission {
 export interface Missions { week_start: string; week_end: string; missions: Mission[]; chest_claimed: boolean; }
 export interface RewardItem { id: number; title: string; cost: number; emoji: string; repeatable: boolean; is_archived: boolean; times_redeemed: number; available: boolean; }
 export interface CoinEntry { id: number; amount: number; reason: 'mission' | 'chest' | 'reward' | 'freeze'; detail: string; created_at: string; }
+
+// ---------- Objetivos a largo plazo ----------
+export type GoalStatus = 'active' | 'done' | 'archived';
+export interface GoalProgress {
+  percent: number | null; tasks_done: number; tasks_total: number; milestones_done: number; milestones_total: number;
+  habit_rate: number | null; habits_count: number; projects_count: number;
+  /** % de tiempo transcurrido hasta la fecha límite (solo activos con fecha). */
+  expected: number | null; days_left: number | null; on_track: boolean;
+}
+export interface Goal {
+  id: number; title: string; description?: string | null; color: string; deadline?: string | null;
+  status: GoalStatus; completed_at?: string | null; created_at: string; progress: GoalProgress;
+}
+export interface GoalDetail extends Goal {
+  projects: { id: number; name: string; color: string; done: number; total: number }[];
+  tasks: { id: number; title: string; status: Status; priority: Priority; due_date?: string | null; all_day: boolean; project_id?: number | null; linked: boolean }[];
+  habits: { id: number; title: string; color: string; rate: number | null; archived: boolean }[];
+  milestones: { id: number; title: string; done: boolean; done_at?: string | null }[];
+  /** Experiencia que daría cumplirlo ahora (null si ya está cumplido). */
+  xp: number | null;
+  xp_gained?: number;
+}
+export type GoalLinkKind = 'project' | 'task' | 'habit';
