@@ -58,7 +58,7 @@ const R = 104, CIRC = 2 * Math.PI * R;
           </div>
         </section>
 
-        <form class="card box" (ngSubmit)="save()">
+        <form class="card box" (ngSubmit)="save()" (input)="dirty = true" (change)="dirty = true">
           <h2>Ajustes del reloj</h2>
           <div class="grid2">
             <label class="field">Concentración (min) <input class="input" type="number" name="focus" min="1" max="180" [(ngModel)]="s.focus_minutes" required /></label>
@@ -132,7 +132,8 @@ export class FocusComponent implements OnInit {
     effect(() => { const v = this.p.settings(); if (first || !this.dirty) this.s = { ...v }; first = false; });
     effect(() => { this.p.logged(); this.loadStats(); });
   }
-  private dirty = false;
+  // Al tocar el formulario, los ajustes que lleguen tarde del servidor ya no pisan lo que se está escribiendo
+  dirty = false;
 
   ngOnInit() {
     this.p.init();

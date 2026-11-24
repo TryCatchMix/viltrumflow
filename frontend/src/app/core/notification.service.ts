@@ -47,6 +47,15 @@ export class NotificationService {
     }
   }
 
+  private morning(r: Reminder) {
+    const url = r.by || '/plan';
+    this.toast.show(`Buenos días ☀️ ${r.title}`, 'info', 15_000);
+    if (this.supported && Notification.permission === 'granted') {
+      const n = new Notification('Buenos días ☀️', { body: r.title, tag: 'vf-morning' });
+      n.onclick = () => { window.focus(); this.router.navigateByUrl(url); n.close(); };
+    }
+  }
+
   private mood(r: Reminder) {
     this.toast.show(`${r.title} Registra tu ánimo en «Hoy».`, 'info', 12_000);
     if (this.supported && Notification.permission === 'granted') {
@@ -69,6 +78,7 @@ export class NotificationService {
     if (r.kind === 'assigned') return this.assigned(r);
     if (r.kind === 'habit') return this.habit(r);
     if (r.kind === 'mood') return this.mood(r);
+    if (r.kind === 'morning') return this.morning(r);
     const when = r.all_day || !r.due_date ? 'vence hoy o mañana' : `a las ${TIME.format(new Date(r.due_date))}`;
     const open = () => this.api.task(r.task_id).subscribe({ next: t => this.dialog.edit(t), error: () => {} });
     // Siempre queda el aviso dentro de la app; la notificación del sistema es un extra si hay permiso

@@ -57,6 +57,18 @@ import { ToastService } from '../core/toast.service';
           @default { <button class="btn" (click)="togglePush(true)"><app-icon name="bell" /> Activar</button> }
         }
       </div>
+      <div class="opt" id="morning">
+        <div><strong>Resumen de la mañana</strong>
+          <p class="muted">A esa hora, qué tienes hoy (tareas, atrasadas, rutinas) y un enlace para planificar el día. <button type="button" class="link" (click)="previewMorning()">Ver cómo sería hoy</button></p>
+          @if (morningPreview(); as m) { <p class="preview">☀️ {{ m }}</p> }</div>
+        <div class="row">
+          <select class="input hour" [ngModel]="auth.user()?.morning_summary_hour" (ngModelChange)="setPref({ morning_summary_hour: $event })"
+            [ngModelOptions]="{ standalone: true }" [disabled]="!auth.user()?.morning_summary" aria-label="Hora del resumen de la mañana">
+            @for (h of morningHours; track h) { <option [ngValue]="h">{{ h < 10 ? '0' + h : h }}:00</option> }
+          </select>
+          <input type="checkbox" [checked]="auth.user()?.morning_summary" (change)="setPref({ morning_summary: $any($event.target).checked })" aria-label="Activar el resumen de la mañana" />
+        </div>
+      </div>
       <div class="opt" id="mood">
         <div><strong>Aviso del diario de ánimo</strong>
           <p class="muted">Si a esa hora aún no has registrado cómo ha ido el día, te lo recuerda (en la app y, si los tienes activados, con la app cerrada).</p></div>
@@ -148,6 +160,8 @@ import { ToastService } from '../core/toast.service';
     .narrow { max-width: 640px; } .sec { padding: 20px; display: grid; gap: 14px; margin-bottom: 14px; }
     .opt { display: flex; align-items: center; gap: 16px; justify-content: space-between; p { font-size: 13px; } strong { font-weight: 500; } }
     .hour { width: 100px; }
+    .link { background: none; border: none; padding: 0; color: var(--accent-text); cursor: pointer; font: inherit; text-decoration: underline; }
+    .preview { margin-top: 6px; padding: 8px 10px; background: var(--surface-2); border-radius: var(--radius-sm); font-size: 13px; color: var(--text); }
     .ok { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
     .box { background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 13px; display: grid; gap: 6px; ul { margin: 0; padding-left: 18px; overflow-wrap: anywhere; } }
     hr { border: none; border-top: 1px solid var(--border); margin: 2px 0; width: 100%; }
@@ -162,6 +176,9 @@ export class SettingsComponent implements AfterViewInit {
   private router = inject(Router);
   hours = Array.from({ length: 24 }, (_, i) => i);
   eveningHours = Array.from({ length: 12 }, (_, i) => i + 12);
+  morningHours = Array.from({ length: 8 }, (_, i) => i + 5);
+  morningPreview = signal('');
+  previewMorning() { this.api.morningSummary().subscribe({ next: m => this.morningPreview.set(m.body), error: e => this.toast.error(e) }); }
   emailReady = signal(true);
   result = signal<ImportResult | null>(null);
   overwrite = false;
@@ -211,7 +228,7 @@ export class SettingsComponent implements AfterViewInit {
       e => this.toast.error(e));
   }
 
-  setPref(data: { email_reminders?: boolean; daily_digest?: boolean; digest_hour?: number; mood_reminder?: boolean; mood_reminder_hour?: number }) {
+  setPref(data: { email_reminders?: boolean; daily_digest?: boolean; digest_hour?: number; mood_reminder?: boolean; mood_reminder_hour?: number; morning_summary?: boolean; morning_summary_hour?: number }) {
     this.auth.updateProfile(data).subscribe({ error: e => this.toast.error(e) });
   }
 

@@ -25,3 +25,10 @@ def poll(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     notices = notify.gather(db, user, datetime.now(timezone.utc))
     db.commit()
     return [schemas.ReminderOut(**n) for n in notices]
+
+
+@router.get("/morning")
+def morning(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Vista previa del resumen de la mañana de hoy (lo mismo que llegará en el aviso)."""
+    from .habits import local_today
+    return notify.morning_summary(db, user, local_today(user))

@@ -5,7 +5,7 @@ import { map, tap } from 'rxjs/operators';
 import { Outbox, asNote, asTask } from './outbox';
 import { environment } from '../../environments/environment';
 import {
-  CoinEntry, Missions, RewardItem, Wallet, GameHistory, GameProfile, Goal, GoalDetail, GoalLinkKind, GoalStatus, WeekGoal, MoodEntry, MoodInsights, MoodLog, ProjectTemplate, TemplateTask, ReviewToday, WeeklyReview, Habit, HabitDayItem, HabitInput, HabitStats, PomodoroSettings, PomodoroStats,
+  CoinEntry, Missions, RewardItem, Wallet, GameHistory, GameProfile, Goal, GoalDetail, GoalLinkKind, GoalStatus, WeekGoal, MoodEntry, MoodInsights, MoodLog, ProjectTemplate, TemplateTask, DayPlanState, ItemListDetail, ItemListSummary, ReviewToday, WeeklyReview, Habit, HabitDayItem, HabitInput, HabitStats, PomodoroSettings, PomodoroStats,
   CalendarEvent, CalendarInfo, CalendarStatus, ChecklistItem, Mention, NoteVersion, Comment, Graph, ImportResult, Member, Note, NoteSummary, Overview, Project,
   Reminder, Role, SearchResult, TrashItem, Status, TagCount, Task, TaskInput,
 } from './models';
@@ -179,6 +179,33 @@ export class ApiService {
   }
   reviewToday() { return this.http.get<ReviewToday>(`${this.base}/review/today`); }
   toggleGoal(week_start: string, index: number, done: boolean) { return this.http.put<void>(`${this.base}/review/goal`, { week_start, index, done }); }
+
+  morningSummary() {
+    return this.http.get<{ tasks: number; important: number; overdue: number; habits: number; planned: boolean; body: string; url: string }>(`${this.base}/reminders/morning`);
+  }
+
+  // Listas reutilizables
+  lists() { return this.http.get<ItemListSummary[]>(`${this.base}/lists`); }
+  list(id: number) { return this.http.get<ItemListDetail>(`${this.base}/lists/${id}`); }
+  createList(data: { name: string; emoji?: string; color?: string; items?: string[] }) { return this.http.post<ItemListDetail>(`${this.base}/lists`, data); }
+  updateList(id: number, data: { name?: string; emoji?: string; color?: string }) { return this.http.put<ItemListDetail>(`${this.base}/lists/${id}`, data); }
+  deleteList(id: number) { return this.http.delete<void>(`${this.base}/lists/${id}`); }
+  addListItems(id: number, text: string) { return this.http.post<ItemListDetail>(`${this.base}/lists/${id}/items`, { text }); }
+  updateListItem(itemId: number, data: { text?: string; checked?: boolean }) { return this.http.patch<ItemListDetail>(`${this.base}/lists/items/${itemId}`, data); }
+  forgetListItem(itemId: number) { return this.http.delete<ItemListDetail>(`${this.base}/lists/items/${itemId}`); }
+  uncheckAll(id: number) { return this.http.post<ItemListDetail>(`${this.base}/lists/${id}/uncheck-all`, null); }
+  clearChecked(id: number) { return this.http.post<ItemListDetail>(`${this.base}/lists/${id}/clear-checked`, null); }
+  addListMember(id: number, identifier: string) { return this.http.post<ItemListDetail>(`${this.base}/lists/${id}/members`, { identifier }); }
+  removeListMember(id: number, userId: number) { return this.http.delete<void>(`${this.base}/lists/${id}/members/${userId}`); }
+
+  // Plan del día (ritual de inicio y cierre)
+  dayPlan(day?: string) { return this.http.get<DayPlanState>(`${this.base}/day-plan`, { params: params({ day }) }); }
+  saveDayPlan(day: string, data: { priorities: number[]; intention?: string | null }) {
+    return this.http.put<DayPlanState>(`${this.base}/day-plan/${day}`, data);
+  }
+  closeDay(day: string, data: { reflection?: string | null; move_to_tomorrow: number[] }) {
+    return this.t(this.http.post<DayPlanState>(`${this.base}/day-plan/${day}/close`, data));
+  }
 
   // Plantillas de proyecto
   projectTemplates() { return this.http.get<{ mine: ProjectTemplate[]; examples: ProjectTemplate[] }>(`${this.base}/project-templates`); }

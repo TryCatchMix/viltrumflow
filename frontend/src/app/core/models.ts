@@ -24,7 +24,7 @@ export const PRIORITIES: Priority[] = ['urgent', 'high', 'medium', 'low'];
 export interface User {
   id: number; email: string; username: string; full_name?: string | null; avatar_url?: string | null;
   bio?: string | null; theme: 'light' | 'dark' | 'auto'; language: string; timezone: string;
-  email_reminders: boolean; daily_digest: boolean; digest_hour: number; mood_reminder: boolean; mood_reminder_hour: number; created_at: string; last_login?: string | null;
+  email_reminders: boolean; daily_digest: boolean; digest_hour: number; mood_reminder: boolean; mood_reminder_hour: number; morning_summary: boolean; morning_summary_hour: number; created_at: string; last_login?: string | null;
   has_password: boolean; google_linked: boolean;
 }
 export interface Token { access_token: string; refresh_token: string; token_type: string; }
@@ -82,7 +82,7 @@ export interface Overview {
   spent_hours_week: number;
 }
 
-export interface Reminder { kind: 'reminder' | 'assigned' | 'habit' | 'mood'; task_id: number; title: string; due_date?: string | null; all_day: boolean; by?: string | null; }
+export interface Reminder { kind: 'reminder' | 'assigned' | 'habit' | 'mood' | 'morning'; task_id: number; title: string; due_date?: string | null; all_day: boolean; by?: string | null; }
 export interface ImportResult { created: number; updated: number; skipped: number; errors: string[]; }
 
 export interface CalendarStatus { configured: boolean; connected: boolean; email?: string | null; auto_sync: boolean; calendar_id: string; }
@@ -213,4 +213,26 @@ export interface TemplateTask {
 export interface ProjectTemplate {
   id: number | null; key: string | null; name: string; description?: string | null; color: string;
   tasks: TemplateTask[]; task_count: number; span_days: number | null;
+}
+
+// ---------- Plan del día ----------
+export interface PlanTask {
+  id: number; title: string; status: Status; priority: Priority; difficulty: number; due_date?: string | null; all_day: boolean;
+  due_day: string | null; estimated_minutes?: number | null; project?: { name: string; color: string } | null;
+}
+export interface DayPlanState {
+  day: string; today: string; planned_at: string | null; closed_at: string | null; intention: string | null; reflection: string | null;
+  priorities: PlanTask[]; due: PlanTask[]; candidates: PlanTask[]; done: PlanTask[];
+  xp: number; mood: { mood: number; energy: number } | null; streak: number;
+  moved?: number; skipped?: number;
+}
+
+// ---------- Listas reutilizables ----------
+export interface ListEntry { id: number; text: string; checked: boolean; times_used: number; }
+export interface ItemListSummary {
+  id: number; name: string; emoji: string; color: string; pending: number; total: number;
+  is_owner: boolean; owner_name: string; member_count: number; updated_at: string;
+}
+export interface ItemListDetail extends ItemListSummary {
+  items: ListEntry[]; suggestions: ListEntry[]; members: { user_id: number; name: string; username: string; owner: boolean }[];
 }
