@@ -5,7 +5,7 @@ import { map, tap } from 'rxjs/operators';
 import { Outbox, asNote, asTask } from './outbox';
 import { environment } from '../../environments/environment';
 import {
-  CoinEntry, Missions, RewardItem, Wallet, GameHistory, GameProfile, Goal, GoalDetail, GoalLinkKind, GoalStatus, WeekGoal, MoodEntry, MoodInsights, MoodLog, ProjectTemplate, TemplateTask, ReviewToday, WeeklyReview, Habit, HabitDayItem, HabitInput, HabitStats, PomodoroSettings, PomodoroStats,
+  CoinEntry, Missions, RewardItem, Wallet, GameHistory, GameProfile, Goal, GoalDetail, GoalLinkKind, GoalStatus, WeekGoal, MoodEntry, MoodInsights, MoodLog, ProjectTemplate, TemplateTask, ScanMode, TcgCard, TcgCardFields, TcgCollection, TcgEvent, TcgScanResult, TcgTotals, ReviewToday, WeeklyReview, Habit, HabitDayItem, HabitInput, HabitStats, PomodoroSettings, PomodoroStats,
   CalendarEvent, CalendarInfo, CalendarStatus, ChecklistItem, Mention, NoteVersion, Comment, Graph, ImportResult, Member, Note, NoteSummary, Overview, Project,
   Reminder, Role, SearchResult, TrashItem, Status, TagCount, Task, TaskInput,
 } from './models';
@@ -201,6 +201,42 @@ export class ApiService {
   }
   deleteMood(day: string) { return this.http.delete<void>(`${this.base}/mood/${day}`).pipe(tap(() => this.moodChanged.next())); }
   moodInsights(days = 30) { return this.http.get<MoodInsights>(`${this.base}/mood/insights`, { params: params({ days }) }); }
+
+  // Colección de Cyberpunk TCG
+  tcg() { return this.http.get<TcgCollection>(`${this.base}/tcg`); }
+  /** Lee la carta de la foto y aplica la función elegida (o pide elegir si hay dudas). */
+  tcgScan(mode: ScanMode, photo: Blob, qty = 1) {
+    const f = new FormData();
+    f.append('mode', mode); f.append('qty', String(qty)); f.append('file', photo, 'carta.jpg');
+    return this.http.post<TcgScanResult>(`${this.base}/tcg/scan`, f);
+  }
+  /** Aplica la función a una carta elegida (`cardId`) o escrita a mano (`fields`). */
+  tcgApply(mode: ScanMode, target: { cardId?: number; fields?: TcgCardFields }, photo?: Blob | null, qty = 1) {
+    const f = new FormData();
+    f.append('mode', mode); f.append('qty', String(qty));
+    if (target.cardId) f.append('card_id', String(target.cardId));
+    for (const [k, v] of Object.entries(target.fields ?? {})) f.append(k, v ?? '');
+    if (photo) f.append('file', photo, 'carta.jpg');
+    return this.http.post<TcgScanResult>(`${this.base}/tcg/apply`, f);
+  }
+  tcgCreate(data: TcgCardFields & { quantity: number; wanted: boolean }) {
+    return this.http.post<{ card: TcgCard; totals: TcgTotals }>(`${this.base}/tcg/cards`, data);
+  }
+  tcgUpdate(id: number, data: TcgCardFields & { quantity: number; wanted: boolean }) {
+    return this.http.put<{ card: TcgCard; totals: TcgTotals }>(`${this.base}/tcg/cards/${id}`, data);
+  }
+  tcgAdjust(id: number, delta: number) {
+    return this.http.post<{ card: TcgCard; totals: TcgTotals }>(`${this.base}/tcg/cards/${id}/adjust`, { delta });
+  }
+  tcgImage(id: number, photo: Blob) {
+    const f = new FormData(); f.append('file', photo, 'carta.jpg');
+    return this.http.post<{ card: TcgCard; totals: TcgTotals }>(`${this.base}/tcg/cards/${id}/image`, f);
+  }
+  tcgDelete(id: number) { return this.http.delete<void>(`${this.base}/tcg/cards/${id}`); }
+  tcgEvents(limit = 8) { return this.http.get<TcgEvent[]>(`${this.base}/tcg/events`, { params: params({ limit }) }); }
+  tcgUndo(eventId: number) {
+    return this.http.post<{ card: TcgCard | null; removed: boolean; totals: TcgTotals }>(`${this.base}/tcg/events/${eventId}/undo`, {});
+  }
 
   // Objetivos a largo plazo
   goals(status: GoalStatus | 'all' = 'active') { return this.http.get<Goal[]>(`${this.base}/goals`, { params: params({ status }) }); }

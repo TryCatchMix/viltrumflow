@@ -214,3 +214,21 @@ export interface ProjectTemplate {
   id: number | null; key: string | null; name: string; description?: string | null; color: string;
   tasks: TemplateTask[]; task_count: number; span_days: number | null;
 }
+
+// Colección de Cyberpunk TCG
+export type ScanMode = 'add' | 'remove' | 'check' | 'wish';
+export interface TcgCard {
+  id: number; name: string; number: string; set_name: string; rarity: string; card_type: string;
+  quantity: number; wanted: boolean; image_url: string | null; updated_at: string | null;
+}
+export interface TcgTotals { copies: number; unique: number; duplicates: number; wanted: number; }
+export interface TcgCollection { recognition: boolean; cards: TcgCard[]; totals: TcgTotals; }
+export interface TcgReading { is_card: boolean; name: string; number: string; set_name: string; rarity: string; card_type: string; confidence: 'high' | 'medium' | 'low'; }
+export interface TcgScanResult {
+  status: 'done' | 'missing' | 'choose' | 'unreadable';
+  mode: ScanMode; reading: TcgReading | null; card: TcgCard | null; created?: boolean; delta: number;
+  event_id: number | null; message: string; candidates: TcgCard[]; totals: TcgTotals;
+}
+export interface TcgCardFields { name: string; number: string; set_name: string; rarity: string; card_type: string; }
+export interface TcgEvent { id: number; mode: ScanMode | 'manual'; delta: number; created_at: string; card: { id: number; name: string; number: string }; }
+

@@ -26,6 +26,7 @@ export const routes: Routes = [
       { path: 'focus', loadComponent: () => import('./pages/focus.component').then(m => m.FocusComponent) },
       { path: 'progress', loadComponent: () => import('./pages/progress.component').then(m => m.ProgressComponent) },
       { path: 'journal', loadComponent: () => import('./pages/journal.component').then(m => m.JournalComponent) },
+      { path: 'collection', loadComponent: () => import('./pages/collection.component').then(m => m.CollectionComponent) },
       { path: 'goals', loadComponent: () => import('./pages/goals.component').then(m => m.GoalsComponent) },
       { path: 'goals/:id', loadComponent: () => import('./pages/goals.component').then(m => m.GoalsComponent) },
       { path: 'share', loadComponent: () => import('./pages/share.component').then(m => m.ShareComponent) },

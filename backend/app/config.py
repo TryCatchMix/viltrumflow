@@ -57,12 +57,20 @@ class Settings(BaseSettings):
     SMTP_STARTTLS: bool = True
     # Web Push: identificación ante los servicios de push (https://… o mailto:…). Por defecto, FRONTEND_URL si es https
     VAPID_SUBJECT: Optional[str] = None
+    # Reconocimiento de cartas por la cámara (colección TCG). Sin clave, la colección funciona a mano.
+    ANTHROPIC_API_KEY: Optional[str] = None
+    TCG_VISION_MODEL: str = "claude-opus-5-5"
+    TCG_VISION_EFFORT: str = "low"  # leer una carta es sencillo: low responde antes y gasta menos
     # Desactívalo en todas las réplicas menos una si ejecutas varios procesos del backend
     SCHEDULER_ENABLED: bool = True
 
     @property
     def email_configured(self) -> bool:
         return bool(self.SMTP_HOST and (self.SMTP_FROM or self.SMTP_USER))
+
+    @property
+    def tcg_vision_configured(self) -> bool:
+        return bool(self.ANTHROPIC_API_KEY)
 
     @property
     def is_production(self) -> bool:

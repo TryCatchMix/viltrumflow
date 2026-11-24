@@ -525,3 +525,41 @@ class GoogleAccount(TimestampMixin, Base):
     auto_sync: Mapped[bool] = mapped_column(Boolean, default=True)
 
     user: Mapped[User] = relationship(back_populates="google_account")
+
+
+class TcgCard(TimestampMixin, Base):
+    """
+    Carta de la colección de Cyberpunk TCG. El catálogo lo forma cada usuario al escanear o añadir a mano:
+    una carta se identifica por su nombre (normalizado) y su número de colección («β001», «005b»).
+    """
+
+    __tablename__ = "tcg_cards"
+    __table_args__ = (UniqueConstraint("user_id", "name_key", "number", name="uq_tcg_card_user_name_number"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    name_key: Mapped[str] = mapped_column(String(120))  # minúsculas, sin acentos ni signos: para comparar
+    number: Mapped[str] = mapped_column(String(20), default="")
+    set_name: Mapped[str] = mapped_column(String(80), default="")
+    rarity: Mapped[str] = mapped_column(String(40), default="")
+    card_type: Mapped[str] = mapped_column(String(40), default="")
+    quantity: Mapped[int] = mapped_column(Integer, default=0)
+    wanted: Mapped[bool] = mapped_column(Boolean, default=False)  # lista de deseos
+    # Foto tomada al escanearla (o subida a mano); se guarda como imagen privada del usuario
+    image_id: Mapped[Optional[str]] = mapped_column(ForeignKey("attachments.id", ondelete="SET NULL"))
+
+
+class TcgEvent(Base):
+    """Cada escaneo o ajuste de la colección: historial reciente y «Deshacer»."""
+
+    __tablename__ = "tcg_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    card_id: Mapped[int] = mapped_column(ForeignKey("tcg_cards.id", ondelete="CASCADE"), index=True)
+    mode: Mapped[str] = mapped_column(String(10))  # add, remove, wish, manual
+    delta: Mapped[int] = mapped_column(Integer, default=0)
+    created_card: Mapped[bool] = mapped_column(Boolean, default=False)  # la carta nació con este evento
+    was_wanted: Mapped[bool] = mapped_column(Boolean, default=False)  # estado de la lista de deseos antes
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

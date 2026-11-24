@@ -166,6 +166,7 @@ export class ShellComponent implements OnInit, OnDestroy {
     { path: '/goals', icon: 'mountain', label: 'Objetivos' },
     { path: '/focus', icon: 'target', label: 'Enfoque' },
     { path: '/journal', icon: 'smile', label: 'Diario' },
+    { path: '/collection', icon: 'cards', label: 'Colección TCG' },
     { path: '/review', icon: 'history', label: 'Revisión semanal' },
     { path: '/missions', icon: 'flag', label: 'Misiones' },
     { path: '/progress', icon: 'shield', label: 'Progreso', gap: true },

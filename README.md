@@ -30,6 +30,7 @@ notas Markdown con `[[enlaces]]` al estilo Obsidian, vista de grafo y panel con 
 | **Plantillas de proyecto** | Proyectos con sus tareas y subtareas ya hechas («Mudanza», «Preparar un examen», «Viaje»…) y fechas relativas al día de inicio; guarda los tuyos como plantilla |
 | **Objetivos a largo plazo** | Metas con fecha límite que agrupan proyectos, tareas, rutinas e hitos; avance, ritmo esperado y experiencia al cumplirlas |
 | **Diario de ánimo y energía** | Registro de diez segundos al día cruzado con tareas, rutinas y concentración: qué días y a qué horas rindes más y qué te influye |
+| **Colección Cyberpunk TCG** | Enseña una carta a la cámara del móvil y elige qué hacer: añadirla (+1), quitarla, consultar cuántas tienes o apuntarla en la lista de deseos; siempre ves cuántas copias tienes y el total de la colección |
 | **Compartir desde el móvil** | Con la app instalada, ViltrumFlow aparece en el menú «Compartir» de Android: lo compartido se guarda como nota o tarea |
 | **Misiones y recompensas** | Tres misiones semanales con experiencia y monedas, protector de racha y premios propios que se canjean con monedas |
 | **Tareas** | Alta rápida, subtareas, comentarios, prioridad, etiquetas, fecha con o sin hora, filtros y agrupación |
@@ -224,6 +225,42 @@ Las correlaciones necesitan al menos 7 días registrados; con menos, no se sacan
   tiene registro, avisa una vez, en la app abierta y, si los tienes activados, con la app cerrada.
 - La **revisión semanal** muestra el ánimo medio de la semana y si ha subido o bajado respecto a la anterior.
 
+## Colección Cyberpunk TCG
+
+**Colección TCG** (menú lateral) lleva la cuenta de tus cartas de Cyberpunk TCG con la cámara del móvil.
+
+1. Elige la función: **Añadir** (+1, o ×N con los botones − y +), **Quitar**, **Consultar** (no cambia nada) o
+   **Deseos** (la apunta en la lista de deseos).
+2. Pon la carta dentro del recuadro y pulsa el botón redondo (o toca la imagen).
+3. Encima de la cámara aparece el resumen («✓ Judy Alvarez · tienes 3 · total 57 cartas») y debajo la ficha de la
+   carta con su foto, cuántas copias tienes y el total de la colección (cartas, distintas).
+
+- **Deshacer** revierte el último escaneo; **No es esta carta** lo deshace y deja escribir cuál era. «Últimos cambios»
+  permite deshacer cualquiera de los recientes.
+- Si la lectura es dudosa (por ejemplo, el nombre se lee pero el número no, y tienes dos impresiones de esa carta),
+  pregunta cuál es en vez de adivinar. Si consultas o quitas una carta que no tienes, ofrece añadirla o apuntarla
+  en deseos.
+- La colección se forma al escanear: cada carta se identifica por su **nombre y número de colección**. «1» y «001»
+  son el mismo número; la impresión beta (`β001`) y la normal (`001`) son cartas distintas. Leer el nombre con una
+  letra de más no crea un duplicado si el número coincide.
+- La primera foto de cada carta se guarda como su imagen (privada, cuenta para el límite de imágenes).
+- **Mi colección**: buscador, filtros (todas, las tengo, repetidas, deseos), orden por número, nombre o copias,
+  botones − y + por carta, y edición de nombre, número, rareza, tipo, set, copias y foto. Al tener al menos una copia
+  la carta sale de la lista de deseos.
+- Sin cámara (o sin permiso) se puede **subir o hacer una foto** con el botón de debajo, y siempre se puede añadir
+  una carta **a mano**.
+
+**Configuración.** El reconocimiento usa la visión de Claude: define `ANTHROPIC_API_KEY` en `.env`
+([crea una clave](https://console.anthropic.com/settings/keys)) y reinicia el backend. El modelo se cambia con
+`TCG_VISION_MODEL` (por defecto `claude-opus-5-5`) y el esfuerzo con `TCG_VISION_EFFORT` (por defecto `low`, que
+basta para leer una carta y responde antes). Cada escaneo es una petición a la API (de pago por uso); la foto se
+recorta al recuadro y se reduce a 1200 px antes de enviarla. Se envía también la lista de nombres y números de tu
+colección para que escriba el nombre igual que lo tienes. Sin clave, la sección funciona igual pero las cartas se
+añaden a mano.
+
+El navegador solo deja usar la cámara en páginas seguras: `https://` en producción (o `http://localhost` en
+desarrollo). Para probar desde el móvil contra tu ordenador, usa la app desplegada con HTTPS o sube una foto.
+
 ## Plantillas de proyecto
 
 En **Proyectos → Desde plantilla** eliges una plantilla, el nombre, el **día de inicio** y, si quieres, un objetivo al
@@ -410,6 +447,7 @@ Todas las rutas cuelgan de `/api/v1` y, salvo registro e inicio de sesión, requ
 | Pomodoro y progreso | `GET/PUT /pomodoro/settings` · `POST /pomodoro/sessions` · `GET /pomodoro/stats` · `GET /game/profile` · `GET /game/history` |
 | Plantillas de proyecto | `GET/POST /project-templates` · `PUT/DELETE /project-templates/{id}` · `POST /project-templates/from-project/{id}` · `POST /project-templates/apply` |
 | Diario | `GET /mood` · `PUT/DELETE /mood/{día}` · `GET /mood/insights` |
+| Colección TCG | `GET /tcg` · `POST /tcg/scan` · `POST /tcg/apply` · `POST /tcg/cards` · `PUT/DELETE /tcg/cards/{id}` · `POST /tcg/cards/{id}/adjust` · `POST /tcg/cards/{id}/image` · `GET /tcg/events` · `POST /tcg/events/{id}/undo` |
 | Objetivos | `GET/POST /goals` · `GET/PUT/DELETE /goals/{id}` · `POST /goals/{id}/complete` · `POST /goals/{id}/reopen` · `POST /goals/{id}/milestones` · `PUT/DELETE /goals/milestones/{id}` · `POST /goals/{id}/links` · `DELETE /goals/{id}/links/{kind}/{ref_id}` · `GET /goals/for/{kind}/{ref_id}` |
 | Misiones y recompensas | `GET /game/wallet` · `POST /game/freezes/buy` · `GET /game/missions` · `POST /game/missions/{key}/claim` · `GET/POST /game/rewards` · `PUT/DELETE /game/rewards/{id}` · `POST /game/rewards/{id}/redeem` · `GET /game/coins/history` · `DELETE /game/coins/{id}` |
 | Papelera | `GET/DELETE /trash` · `POST /trash/{note\|task}/{id}/restore` · `DELETE /trash/{note\|task}/{id}` |
