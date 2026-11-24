@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: Optional[str] = None
     GOOGLE_CLIENT_SECRET: Optional[str] = None
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/calendar/callback"
+    # Inicio de sesión con Google (mismo cliente OAuth). Por defecto, junto a la de Calendar: …/auth/google/callback
+    GOOGLE_LOGIN_REDIRECT_URI: Optional[str] = None
+    GOOGLE_LOGIN_ENABLED: bool = True
 
     # Imágenes adjuntas a las notas: se guardan en disco, fuera de la base de datos
     UPLOAD_DIR: str = "./uploads"
@@ -68,6 +71,17 @@ class Settings(BaseSettings):
     @property
     def google_configured(self) -> bool:
         return bool(self.GOOGLE_CLIENT_ID and self.GOOGLE_CLIENT_SECRET)
+
+    @property
+    def google_login_configured(self) -> bool:
+        return self.google_configured and self.GOOGLE_LOGIN_ENABLED
+
+    @property
+    def google_login_redirect_uri(self) -> str:
+        if self.GOOGLE_LOGIN_REDIRECT_URI:
+            return self.GOOGLE_LOGIN_REDIRECT_URI
+        base = self.GOOGLE_REDIRECT_URI.split("/api/v1/", 1)[0]
+        return f"{base}/api/v1/auth/google/callback"
 
 
 @lru_cache()

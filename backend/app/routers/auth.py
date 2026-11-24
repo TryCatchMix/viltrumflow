@@ -55,15 +55,25 @@ def register(data: schemas.UserCreate, db: Session = Depends(get_db)):
     )
     db.add(user)
     db.flush()
+    add_starter_notes(db, user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def add_starter_notes(db: Session, user: User) -> None:
     for title, content in (("Bienvenido", WELCOME), ("Ideas", "# Ideas\n\nApunta aquí lo que se te ocurra. Vuelve a [[Bienvenido]].\n")):
         note = Note(title=title, content=content, owner_id=user.id)
         db.add(note)
         db.flush()
         sync_note_index(db, note)
         resolve_dangling(db, note)
-    db.commit()
-    db.refresh(user)
-    return user
+
+
+@router.get("/providers", response_model=schemas.AuthProviders)
+def providers():
+    """Métodos de acceso disponibles en este servidor (la pantalla de entrada solo muestra los activos)."""
+    return {"google": settings.google_login_configured}
 
 
 @router.post("/login", response_model=schemas.Token)
@@ -119,9 +129,11 @@ def update_me(data: schemas.UserUpdate, user: User = Depends(get_current_user), 
 @router.post("/change-password", response_model=schemas.Token)
 def change_password(data: schemas.PasswordChange, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Cambia la contraseña. Las demás sesiones se cierran; esta recibe tokens nuevos para continuar."""
-    if not verify_password(data.current_password, user.hashed_password):
+    # Quien se registró con Google aún no tiene contraseña: la elige sin escribir la actual
+    if user.password_set and not verify_password(data.current_password or "", user.hashed_password):
         raise HTTPException(400, "La contraseña actual no es correcta")
     user.hashed_password = hash_password(data.new_password)
+    user.password_set = True
     db.commit()
     return create_token_pair(user.id, user.hashed_password)
 
@@ -166,6 +178,7 @@ def reset_password(data: schemas.ResetPassword, db: Session = Depends(get_db)):
     if not user or not user.is_active or payload.get("pv") != password_version(user.hashed_password):
         raise invalid
     user.hashed_password = hash_password(data.new_password)
+    user.password_set = True
     db.commit()
     return {"message": "Contraseña actualizada. Ya puedes iniciar sesión."}
 

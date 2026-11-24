@@ -37,6 +37,7 @@ export default defineConfig({
         ENVIRONMENT: 'test',
         SCHEDULER_ENABLED: 'false',
         LOGIN_MAX_ATTEMPTS: '1000',
+        FRONTEND_URL: 'http://localhost:4300',
       },
     },
     {

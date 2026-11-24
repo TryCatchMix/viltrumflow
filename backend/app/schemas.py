@@ -83,7 +83,8 @@ class UserUpdate(BaseModel):
 
 
 class PasswordChange(BaseModel):
-    current_password: str
+    # Opcional solo para cuentas creadas con Google que aún no tienen contraseña
+    current_password: Optional[str] = None
     new_password: str = Field(min_length=8, max_length=72)
 
     _strong = field_validator("new_password")(_strong_password)
@@ -104,12 +105,22 @@ class UserOut(ORM):
     digest_hour: int
     created_at: datetime
     last_login: Optional[datetime] = None
+    has_password: bool = True
+    google_linked: bool = False
 
 
 class Token(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+
+
+class AuthProviders(BaseModel):
+    google: bool
+
+
+class GoogleExchange(BaseModel):
+    code: str = Field(max_length=2000)
 
 
 class ForgotPassword(BaseModel):

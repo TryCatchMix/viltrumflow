@@ -88,6 +88,23 @@ npm run e2e                       # compila y ejecuta; `npm run e2e:only` reutil
 Cada push y cada pull request ejecutan en GitHub Actions los tests del backend (SQLite y PostgreSQL), las
 pruebas de navegador y la construcción y arranque de las imágenes Docker (`.github/workflows/ci.yml`).
 
+## Iniciar sesión con Google
+
+Usa el mismo cliente OAuth que Google Calendar (pasos de la sección siguiente). Basta con añadir una
+segunda **URI de redirección autorizada**: `http://localhost:8000/api/v1/auth/google/callback`
+(en producción, `https://tu-dominio/api/v1/auth/google/callback`). Con `GOOGLE_CLIENT_ID` y
+`GOOGLE_CLIENT_SECRET` definidos aparece el botón **Continuar con Google** al entrar y al registrarse
+(`GOOGLE_LOGIN_ENABLED=false` lo oculta y deja solo Calendar).
+
+- **Primera vez**: se crea la cuenta con el nombre, email y foto de Google, y las notas de bienvenida. Para
+  entrar también con usuario y contraseña, elige una en **Ajustes → Contraseña** (no pide la actual).
+- **Cuenta que ya existía**: entra con tu contraseña y pulsa **Ajustes → Vincular cuenta de Google**. Por
+  seguridad no se vincula sola aunque el email coincida: alguien pudo registrar ese email sin ser su dueño.
+- La cuenta queda ligada a la identidad de Google, no al email: si cambias el email de Google sigues entrando.
+- **Desvincular** solo es posible si la cuenta tiene contraseña (si no, no podrías volver a entrar).
+- Seguridad del flujo: `state` firmado y un nonce en cookie que liga la vuelta de Google al navegador que lo
+  empezó; los tokens de sesión nunca viajan en la URL (la SPA canjea un código de un solo uso de 2 minutos).
+
 ## Google Calendar
 
 La integración es opcional; sin configurar, el resto de la aplicación funciona igual.
@@ -96,7 +113,8 @@ La integración es opcional; sin configurar, el resto de la aplicación funciona
 2. Configura la **pantalla de consentimiento OAuth** y añade tu cuenta como usuario de prueba.
 3. En **Credenciales → Crear credenciales → ID de cliente de OAuth → Aplicación web**, añade como
    **URI de redirección autorizada** `http://localhost:8000/api/v1/calendar/callback`
-   (en producción, `https://tu-dominio/api/v1/calendar/callback`).
+   (en producción, `https://tu-dominio/api/v1/calendar/callback`). Para iniciar sesión con Google añade
+   también `…/api/v1/auth/google/callback`.
 4. Copia el ID y el secreto a `.env` (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`) y reinicia el backend.
 5. En la aplicación: **Calendario → Conectar Google Calendar**.
 
@@ -324,7 +342,8 @@ Todas las rutas cuelgan de `/api/v1` y, salvo registro e inicio de sesión, requ
 
 | Recurso | Rutas |
 | --- | --- |
-| Sesión | `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` · `GET/PUT/DELETE /auth/me` · `POST /auth/change-password` |
+| Sesión | `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` · `GET/PUT/DELETE /auth/me` · `POST /auth/change-password` · `GET /auth/providers` |
+| Google (acceso) | `GET /auth/google/start` · `GET /auth/google/callback` · `POST /auth/google/exchange` · `POST /auth/google/link-ticket` · `DELETE /auth/google/link` |
 | Tareas | `GET/POST /tasks` · `GET/PUT/DELETE /tasks/{id}` · `PATCH /tasks/{id}/move` · `/tasks/{id}/comments` |
 | Proyectos | `GET/POST /projects` · `GET/PUT/DELETE /projects/{id}` · `GET/POST /projects/{id}/members` · `PUT/DELETE /projects/{id}/members/{user_id}` |
 | Rutinas | `GET/POST /habits` · `PUT/DELETE /habits/{id}` · `GET /habits/day` · `PUT /habits/{id}/check` · `GET /habits/stats` |

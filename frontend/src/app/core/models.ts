@@ -25,6 +25,7 @@ export interface User {
   id: number; email: string; username: string; full_name?: string | null; avatar_url?: string | null;
   bio?: string | null; theme: 'light' | 'dark' | 'auto'; language: string; timezone: string;
   email_reminders: boolean; daily_digest: boolean; digest_hour: number; created_at: string; last_login?: string | null;
+  has_password: boolean; google_linked: boolean;
 }
 export interface Token { access_token: string; refresh_token: string; token_type: string; }
 
