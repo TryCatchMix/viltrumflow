@@ -27,6 +27,7 @@ notas Markdown con `[[enlaces]]` al estilo Obsidian, vista de grafo y panel con 
 | **Estadísticas de rutinas** | Qué se cumple y qué no día a día, porcentaje, rachas, a qué hora se marcan, puntualidad frente a la hora prevista y cumplimiento por día de la semana |
 | **Pomodoro** | Reloj configurable (concentración, descansos, bloques por serie, inicio automático, sonido y aviso); cada bloque suma tiempo a la tarea elegida |
 | **Progreso** | Experiencia por tareas, rutinas y concentración; niveles, diez rangos del Imperio, logros y gráficos |
+| **Plantillas de proyecto** | Proyectos con sus tareas y subtareas ya hechas («Mudanza», «Preparar un examen», «Viaje»…) y fechas relativas al día de inicio; guarda los tuyos como plantilla |
 | **Objetivos a largo plazo** | Metas con fecha límite que agrupan proyectos, tareas, rutinas e hitos; avance, ritmo esperado y experiencia al cumplirlas |
 | **Diario de ánimo y energía** | Registro de diez segundos al día cruzado con tareas, rutinas y concentración: qué días y a qué horas rindes más y qué te influye |
 | **Compartir desde el móvil** | Con la app instalada, ViltrumFlow aparece en el menú «Compartir» de Android: lo compartido se guarda como nota o tarea |
@@ -219,6 +220,22 @@ La página **Diario** (30, 90 o 180 días) cruza esos registros con lo que haces
 
 Las correlaciones necesitan al menos 7 días registrados; con menos, no se sacan conclusiones de ellas.
 
+- **Aviso por la tarde** (Ajustes → Recordatorios y avisos): a la hora elegida (de 12:00 a 23:00), si el día aún no
+  tiene registro, avisa una vez, en la app abierta y, si los tienes activados, con la app cerrada.
+- La **revisión semanal** muestra el ánimo medio de la semana y si ha subido o bajado respecto a la anterior.
+
+## Plantillas de proyecto
+
+En **Proyectos → Desde plantilla** eliges una plantilla, el nombre, el **día de inicio** y, si quieres, un objetivo al
+que ligar el proyecto. Se crea el proyecto con todas sus tareas, subtareas, dificultad y prioridad; cada tarea cae en
+su día relativo al inicio (0 es el primer día, 7 una semana después, −3 tres días antes; sin día, sin fecha).
+
+- **Ejemplos incluidos**: Mudanza, Preparar un examen, Viaje y Lanzar un proyecto. «Hacer una copia editable» los pasa a
+  tus plantillas para adaptarlos.
+- **Guardar como plantilla** (icono en cada proyecto): copia sus tareas principales con sus subtareas, y las fechas pasan
+  a ser relativas a la primera.
+- Se editan en el propio diálogo: tarea, día, dificultad y subtareas (separadas por `;`).
+
 ## Compartir desde el móvil
 
 Con ViltrumFlow instalada (ver *Uso sin conexión*), en Android aparece en el menú **Compartir** de cualquier app.
@@ -391,6 +408,7 @@ Todas las rutas cuelgan de `/api/v1` y, salvo registro e inicio de sesión, requ
 | Rutinas | `GET/POST /habits` · `PUT/DELETE /habits/{id}` · `GET /habits/day` · `PUT /habits/{id}/check` · `GET /habits/stats` |
 | Avisos push y revisión | `GET /push/key` · `POST /push/subscribe` · `POST /push/unsubscribe` · `POST /push/test` · `GET/PUT /review` · `POST /review/complete` · `GET /review/today` · `PUT /review/goal` |
 | Pomodoro y progreso | `GET/PUT /pomodoro/settings` · `POST /pomodoro/sessions` · `GET /pomodoro/stats` · `GET /game/profile` · `GET /game/history` |
+| Plantillas de proyecto | `GET/POST /project-templates` · `PUT/DELETE /project-templates/{id}` · `POST /project-templates/from-project/{id}` · `POST /project-templates/apply` |
 | Diario | `GET /mood` · `PUT/DELETE /mood/{día}` · `GET /mood/insights` |
 | Objetivos | `GET/POST /goals` · `GET/PUT/DELETE /goals/{id}` · `POST /goals/{id}/complete` · `POST /goals/{id}/reopen` · `POST /goals/{id}/milestones` · `PUT/DELETE /goals/milestones/{id}` · `POST /goals/{id}/links` · `DELETE /goals/{id}/links/{kind}/{ref_id}` · `GET /goals/for/{kind}/{ref_id}` |
 | Misiones y recompensas | `GET /game/wallet` · `POST /game/freezes/buy` · `GET /game/missions` · `POST /game/missions/{key}/claim` · `GET/POST /game/rewards` · `PUT/DELETE /game/rewards/{id}` · `POST /game/rewards/{id}/redeem` · `GET /game/coins/history` · `DELETE /game/coins/{id}` |

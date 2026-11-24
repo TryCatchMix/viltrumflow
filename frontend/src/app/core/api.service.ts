@@ -5,7 +5,7 @@ import { map, tap } from 'rxjs/operators';
 import { Outbox, asNote, asTask } from './outbox';
 import { environment } from '../../environments/environment';
 import {
-  CoinEntry, Missions, RewardItem, Wallet, GameHistory, GameProfile, Goal, GoalDetail, GoalLinkKind, GoalStatus, WeekGoal, MoodEntry, MoodInsights, MoodLog, ReviewToday, WeeklyReview, Habit, HabitDayItem, HabitInput, HabitStats, PomodoroSettings, PomodoroStats,
+  CoinEntry, Missions, RewardItem, Wallet, GameHistory, GameProfile, Goal, GoalDetail, GoalLinkKind, GoalStatus, WeekGoal, MoodEntry, MoodInsights, MoodLog, ProjectTemplate, TemplateTask, ReviewToday, WeeklyReview, Habit, HabitDayItem, HabitInput, HabitStats, PomodoroSettings, PomodoroStats,
   CalendarEvent, CalendarInfo, CalendarStatus, ChecklistItem, Mention, NoteVersion, Comment, Graph, ImportResult, Member, Note, NoteSummary, Overview, Project,
   Reminder, Role, SearchResult, TrashItem, Status, TagCount, Task, TaskInput,
 } from './models';
@@ -179,6 +179,20 @@ export class ApiService {
   }
   reviewToday() { return this.http.get<ReviewToday>(`${this.base}/review/today`); }
   toggleGoal(week_start: string, index: number, done: boolean) { return this.http.put<void>(`${this.base}/review/goal`, { week_start, index, done }); }
+
+  // Plantillas de proyecto
+  projectTemplates() { return this.http.get<{ mine: ProjectTemplate[]; examples: ProjectTemplate[] }>(`${this.base}/project-templates`); }
+  createProjectTemplate(data: { name: string; description?: string | null; color: string; tasks: TemplateTask[] }) {
+    return this.http.post<ProjectTemplate>(`${this.base}/project-templates`, data);
+  }
+  updateProjectTemplate(id: number, data: Partial<{ name: string; description: string | null; color: string; tasks: TemplateTask[] }>) {
+    return this.http.put<ProjectTemplate>(`${this.base}/project-templates/${id}`, data);
+  }
+  deleteProjectTemplate(id: number) { return this.http.delete<void>(`${this.base}/project-templates/${id}`); }
+  templateFromProject(projectId: number) { return this.http.post<ProjectTemplate>(`${this.base}/project-templates/from-project/${projectId}`, null); }
+  applyProjectTemplate(data: { template_id?: number; example?: string; name?: string; start?: string; color?: string; goal_id?: number | null }) {
+    return this.t(this.http.post<{ project: Project; tasks_created: number }>(`${this.base}/project-templates/apply`, data));
+  }
 
   // Diario de ánimo y energía
   moodLog(days = 90) { return this.http.get<MoodLog>(`${this.base}/mood`, { params: params({ days }) }); }

@@ -3,22 +3,24 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../core/api.service';
 import { AuthService } from '../core/auth.service';
-import { Member, Project, ROLE_LABEL, Role } from '../core/models';
+import { Member, Project, ProjectTemplate, ROLE_LABEL, Role } from '../core/models';
 import { ToastService } from '../core/toast.service';
 import { IconComponent } from '../shared/icon.component';
+import { ProjectTemplatesComponent } from '../shared/project-templates.component';
 
 const COLORS = ['#7c5cff', '#2a78d6', '#1baf7a', '#eda100', '#eb6834', '#e34948', '#e87ba4', '#6b7280'];
 
 @Component({
   selector: 'app-projects',
   standalone: true,
-  imports: [FormsModule, RouterLink, IconComponent],
+  imports: [FormsModule, RouterLink, IconComponent, ProjectTemplatesComponent],
   template: `
   <div class="page">
     <div class="page-head">
       <div><h1>Proyectos</h1><p>Agrupa tus tareas y sigue su avance.</p></div>
       <span class="spacer"></span>
       <label class="row muted"><input type="checkbox" [ngModel]="archived()" (ngModelChange)="archived.set($event); load()" /> Mostrar archivados</label>
+      <button class="btn" (click)="templates.set({ edit: null })"><app-icon name="template" /> Desde plantilla</button>
       <button class="btn primary" (click)="open()"><app-icon name="plus" /> Nuevo proyecto</button>
     </div>
 
@@ -32,6 +34,7 @@ const COLORS = ['#7c5cff', '#2a78d6', '#1baf7a', '#eda100', '#eb6834', '#e34948'
             <span class="spacer"></span>
             <button class="btn ghost sm" [title]="p.role === 'owner' ? 'Compartir proyecto' : 'Ver quién tiene acceso'" (click)="share(p)">
               <app-icon name="users" />@if (p.member_count) { {{ p.member_count + 1 }} }</button>
+            <button class="btn ghost icon sm" title="Guardar como plantilla" [attr.aria-label]="'Guardar ' + p.name + ' como plantilla'" (click)="saveAsTemplate(p)"><app-icon name="template" /></button>
             @if (p.role === 'owner') { <button class="btn ghost icon sm" title="Editar" (click)="open(p)"><app-icon name="edit" /></button> }
           </header>
           <p class="muted desc">{{ p.description || (p.role === 'owner' ? 'Sin descripción' : 'Compartido por ' + p.owner_name) }}</p>
@@ -43,11 +46,14 @@ const COLORS = ['#7c5cff', '#2a78d6', '#1baf7a', '#eda100', '#eb6834', '#e34948'
         </article>
       } @empty {
         @if (loaded()) {
-          <div class="empty card full"><h3>Aún no hay proyectos</h3><p>Crea uno para organizar tus tareas.</p><button class="btn primary" (click)="open()">Nuevo proyecto</button></div>
+          <div class="empty card full"><h3>Aún no hay proyectos</h3><p>Crea uno para organizar tus tareas, o parte de una plantilla («Mudanza», «Preparar un examen», «Viaje»…).</p>
+            <div class="row"><button class="btn" (click)="templates.set({ edit: null })">Ver plantillas</button><button class="btn primary" (click)="open()">Nuevo proyecto</button></div></div>
         }
       }
     </div>
   </div>
+
+  @if (templates(); as t) { <app-project-templates [editTemplate]="t.edit" (closed)="templates.set(null)" /> }
 
   @if (sharing(); as p) {
     <div class="backdrop" (click)="sharing.set(null)">
@@ -135,6 +141,7 @@ export class ProjectsComponent implements OnInit {
   loaded = signal(false);
   editing = signal<Partial<Project> | null>(null);
   sharing = signal<Project | null>(null);
+  templates = signal<{ edit: ProjectTemplate | null } | null>(null);
   members = signal<Member[]>([]);
   roleLabel = ROLE_LABEL;
   who = '';
@@ -170,6 +177,13 @@ export class ProjectsComponent implements OnInit {
   leave(p: Project) {
     if (!confirm(`¿Salir de «${p.name}»? Dejarás de ver sus tareas, incluidas las que creaste dentro.`)) return;
     this.api.removeMember(p.id, this.me()!).subscribe({ next: () => { this.sharing.set(null); this.load(); }, error: e => this.toast.error(e) });
+  }
+
+  saveAsTemplate(p: Project) {
+    this.api.templateFromProject(p.id).subscribe({
+      next: t => { this.toast.success(`«${p.name}» guardado como plantilla`); this.templates.set({ edit: t }); },
+      error: e => this.toast.error(e, 'No se pudo guardar como plantilla'),
+    });
   }
 
   open(p?: Project) {

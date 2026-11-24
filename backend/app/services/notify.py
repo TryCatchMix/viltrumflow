@@ -11,13 +11,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models import Habit, HabitCheck, PushSubscription, ServerKey, Task, User
+from ..models import Habit, HabitCheck, MoodEntry, PushSubscription, ServerKey, Task, User
 from . import access
 from .reminders import due_reminders, user_tz
 
 logger = logging.getLogger(__name__)
 
 HABIT_WINDOW = timedelta(hours=3)  # pasado este margen tras la hora prevista ya no se avisa (sería tarde)
+MOOD_TITLE = "¿Cómo ha ido el día?"
 
 
 # ---------- Recolección de avisos ----------
@@ -39,7 +40,22 @@ def gather(db: Session, user: User, now: datetime) -> List[dict]:
                     "by": t.project.name if t.project else None})
         t.assigned_notified_at = now
     out += _habit_notices(db, user, now)
+    out += _mood_notice(db, user, now)
     return out
+
+
+def _mood_notice(db: Session, user: User, now: datetime) -> List[dict]:
+    """Una vez al día, a partir de la hora elegida (y hasta medianoche), si aún no hay registro de ánimo."""
+    if not user.mood_reminder:
+        return []
+    local = now.astimezone(user_tz(user))
+    today = local.date()
+    if user.last_mood_reminded_on == today or local.hour < (user.mood_reminder_hour or 21):
+        return []
+    if db.query(MoodEntry.id).filter(MoodEntry.user_id == user.id, MoodEntry.day == today).first():
+        return []
+    user.last_mood_reminded_on = today
+    return [{"kind": "mood", "task_id": user.id, "title": MOOD_TITLE, "due_date": None, "all_day": False}]
 
 
 def _habit_notices(db: Session, user: User, now: datetime) -> List[dict]:
@@ -138,6 +154,8 @@ def _message(n: dict, tz) -> dict:
         return payload("Nueva tarea asignada", n["title"] + (f" · {n['by']}" if n.get("by") else ""), "/tasks", f"vf-assigned-{n['task_id']}")
     if n["kind"] == "habit":
         return payload("Rutina pendiente", n["title"], "/today", f"vf-habit-{n['task_id']}")
+    if n["kind"] == "mood":
+        return payload(MOOD_TITLE, "Registra tu ánimo y energía en diez segundos.", "/today", "vf-mood")
     due = n["due_date"]
     when = "Vence hoy o mañana" if n["all_day"] or not due else \
         "Vence a las " + (due if due.tzinfo else due.replace(tzinfo=timezone.utc)).astimezone(tz).strftime("%H:%M")
@@ -175,6 +193,8 @@ def _unmark(db: Session, notices: List[dict]) -> None:
             db.query(Task).filter(Task.id == n["task_id"]).update({"reminder_sent_at": None})
         elif n["kind"] == "assigned":
             db.query(Task).filter(Task.id == n["task_id"]).update({"assigned_notified_at": None})
+        elif n["kind"] == "mood":
+            db.query(User).filter(User.id == n["task_id"]).update({"last_mood_reminded_on": None})
         else:
             db.query(Habit).filter(Habit.id == n["task_id"]).update({"last_reminded_on": None})
     db.commit()

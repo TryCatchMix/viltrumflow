@@ -24,7 +24,7 @@ export const PRIORITIES: Priority[] = ['urgent', 'high', 'medium', 'low'];
 export interface User {
   id: number; email: string; username: string; full_name?: string | null; avatar_url?: string | null;
   bio?: string | null; theme: 'light' | 'dark' | 'auto'; language: string; timezone: string;
-  email_reminders: boolean; daily_digest: boolean; digest_hour: number; created_at: string; last_login?: string | null;
+  email_reminders: boolean; daily_digest: boolean; digest_hour: number; mood_reminder: boolean; mood_reminder_hour: number; created_at: string; last_login?: string | null;
   has_password: boolean; google_linked: boolean;
 }
 export interface Token { access_token: string; refresh_token: string; token_type: string; }
@@ -82,7 +82,7 @@ export interface Overview {
   spent_hours_week: number;
 }
 
-export interface Reminder { kind: 'reminder' | 'assigned' | 'habit'; task_id: number; title: string; due_date?: string | null; all_day: boolean; by?: string | null; }
+export interface Reminder { kind: 'reminder' | 'assigned' | 'habit' | 'mood'; task_id: number; title: string; due_date?: string | null; all_day: boolean; by?: string | null; }
 export interface ImportResult { created: number; updated: number; skipped: number; errors: string[]; }
 
 export interface CalendarStatus { configured: boolean; connected: boolean; email?: string | null; auto_sync: boolean; calendar_id: string; }
@@ -127,6 +127,7 @@ export interface WeeklyReview {
   week_start: string; week_end: string; is_current: boolean;
   completed: ReviewTask[]; carried_over: ReviewTask[]; no_date: ReviewTask[]; upcoming_next_week: number;
   xp: Record<XpKind, number>; xp_total: number; focus_minutes: number; notes_created: number;
+  mood: { days: number; avg_mood: number | null; avg_energy: number | null; prev_avg_mood: number | null; best_day: string | null };
   habits: { rate: number | null; done: number; scheduled: number; perfect_days: number;
     items: { id: number; title: string; color: string; rate: number | null; done: number; scheduled: number; period: 'day' | 'week'; streak: number }[] };
   previous_goals: WeekGoal[]; goals: WeekGoal[]; reflection: string; completed_at: string | null; xp_reward: number;
@@ -203,3 +204,13 @@ export const MOOD_LEVELS = [
 export const ENERGY_LEVELS = [
   { v: 1, label: 'Muy baja' }, { v: 2, label: 'Baja' }, { v: 3, label: 'Normal' }, { v: 4, label: 'Alta' }, { v: 5, label: 'A tope' },
 ];
+
+// ---------- Plantillas de proyecto ----------
+export interface TemplateTask {
+  title: string; description?: string | null; offset_days: number | null; priority: Priority; difficulty: number;
+  estimated_minutes?: number | null; subtasks: string[];
+}
+export interface ProjectTemplate {
+  id: number | null; key: string | null; name: string; description?: string | null; color: string;
+  tasks: TemplateTask[]; task_count: number; span_days: number | null;
+}

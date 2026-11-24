@@ -1,5 +1,6 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { ApiService } from '../core/api.service';
 import { DIFFICULTY_LABEL, WeekGoal, ReviewTask, WeeklyReview, XP_KIND_LABEL, XpKind } from '../core/models';
 import { ToastService } from '../core/toast.service';
@@ -13,7 +14,7 @@ type Step = 'week' | 'pending' | 'next';
 @Component({
   selector: 'app-review',
   standalone: true,
-  imports: [FormsModule, IconComponent, BarListComponent],
+  imports: [FormsModule, RouterLink, IconComponent, BarListComponent],
   template: `
   <div class="page narrow">
     <div class="page-head">
@@ -38,6 +39,9 @@ type Step = 'week' | 'pending' | 'next';
           <div class="card tile"><span>Rutinas cumplidas</span><strong>{{ w.habits.rate ?? '—' }}{{ w.habits.rate === null ? '' : '%' }}</strong><small>{{ w.habits.done }} de {{ w.habits.scheduled }}</small></div>
           <div class="card tile"><span>Concentración</span><strong>{{ w.focus_minutes }}</strong><small>minutos</small></div>
           <div class="card tile"><span>Experiencia</span><strong>{{ w.xp_total }}</strong><small>XP esta semana</small></div>
+          <a class="card tile link" routerLink="/journal"><span>Ánimo medio</span>
+            <strong>{{ w.mood.avg_mood === null ? '—' : dec(w.mood.avg_mood) }}</strong>
+            <small>{{ moodNote(w) }}</small></a>
         </div>
 
         @if (w.previous_goals.length) {
@@ -133,6 +137,7 @@ type Step = 'week' | 'pending' | 'next';
       button { display: flex; gap: 8px; align-items: center; background: none; border: 1px solid var(--border); border-radius: 18px; padding: 5px 14px 5px 6px; color: var(--text-2); font-weight: 500;
         b { width: 22px; height: 22px; border-radius: 50%; background: var(--surface-3); display: grid; place-content: center; font-size: 12px; }
         &.active { border-color: var(--accent); color: var(--text); b { background: var(--accent); color: var(--on-accent); } } } }
+    a.tile.link { color: inherit; text-decoration: none; &:hover { border-color: var(--text-3); } }
     .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 12px; }
     .tile { padding: 14px 16px; display: grid; gap: 2px; span { font-size: 12px; color: var(--text-2); } strong { font-size: 28px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; } small { color: var(--text-3); font-size: 12px; } }
     .box { padding: 16px 18px; display: grid; gap: 10px; margin-bottom: 12px; min-width: 0; h2 { display: flex; gap: 8px; align-items: baseline; } }
@@ -217,5 +222,16 @@ export class ReviewComponent implements OnInit {
       },
       error: e => { this.busy.set(false); this.toast.error(e); },
     });
+  }
+
+  dec(v: number) { return v.toLocaleString('es-ES', { maximumFractionDigits: 1 }); }
+  moodNote(w: WeeklyReview): string {
+    const m = w.mood;
+    if (!m.days) return 'Sin registros en el diario';
+    const parts = [`${m.days} ${m.days === 1 ? 'día' : 'días'} · energía ${m.avg_energy === null ? '—' : this.dec(m.avg_energy)}`];
+    if (m.prev_avg_mood !== null && m.avg_mood !== null && m.avg_mood !== m.prev_avg_mood) {
+      parts.push(`${m.avg_mood > m.prev_avg_mood ? '▲' : '▼'} ${this.dec(Math.abs(m.avg_mood - m.prev_avg_mood))} vs. la anterior`);
+    }
+    return parts.join(' · ');
   }
 }

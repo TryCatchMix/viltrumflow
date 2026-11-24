@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import get_current_user
-from ..models import Note, PomodoroSession, Status, Task, User, WeeklyReview, XpEvent
+from ..models import MoodEntry, Note, PomodoroSession, Status, Task, User, WeeklyReview, XpEvent
 from ..services import access, game
 from ..services.reminders import user_tz
 from .habits import compute_stats, local_today, week_start
@@ -72,6 +72,23 @@ def _task(t: Task, tz) -> dict:
             "project": t.project.name if t.project else None, "can_edit": True}
 
 
+def _mood_week(db: Session, user: User, week: date, end: date) -> dict:
+    """Ánimo y energía medios de la semana (y el ánimo de la anterior, para comparar)."""
+    def rows(first: date, last: date):
+        return db.query(MoodEntry).filter(MoodEntry.user_id == user.id, MoodEntry.day >= first, MoodEntry.day <= last).all()
+
+    def avg(values):
+        return round(sum(values) / len(values), 1) if values else None
+
+    cur, prev = rows(week, end), rows(week - timedelta(days=7), week - timedelta(days=1))
+    best = max(cur, key=lambda e: (e.mood, e.energy, e.day), default=None)
+    return {
+        "days": len(cur), "avg_mood": avg([e.mood for e in cur]), "avg_energy": avg([e.energy for e in cur]),
+        "prev_avg_mood": avg([e.mood for e in prev]),
+        "best_day": best.day.isoformat() if best else None,
+    }
+
+
 @router.get("")
 def summary(week: Optional[date] = Query(None, alias="week_start"), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Todo lo necesario para revisar una semana (de lunes a domingo)."""
@@ -123,6 +140,7 @@ def summary(week: Optional[date] = Query(None, alias="week_start"), user: User =
         "xp": xp, "xp_total": sum(xp.values()),
         "focus_minutes": round(int(focus) / 60),
         "notes_created": int(notes_created),
+        "mood": _mood_week(db, user, week, end),
         "habits": {"rate": habits["rate"], "done": habits["done"], "scheduled": habits["scheduled"],
                    "perfect_days": habits["perfect_days"],
                    "items": [{k: h[k] for k in ("id", "title", "color", "rate", "done", "scheduled", "period", "streak")} for h in habits["habits"]]},

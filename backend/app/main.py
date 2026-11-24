@@ -10,7 +10,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from .config import settings
 from .database import SessionLocal, check_db_connection, init_db
-from .routers import attachments, auth, calendar, goals, google_auth, mood, game, habits, pomodoro, push, review, notes, projects, reminders, search, stats, tasks, trash
+from .routers import attachments, auth, calendar, goals, google_auth, mood, project_templates, game, habits, pomodoro, push, review, notes, projects, reminders, search, stats, tasks, trash
 from datetime import datetime, timezone
 
 from .services import google_calendar as gcal
@@ -105,6 +105,7 @@ def health():
 P = settings.API_V1_STR
 app.include_router(auth.router, prefix=f"{P}/auth", tags=["Auth"])
 app.include_router(google_auth.router, prefix=f"{P}/auth/google", tags=["Auth"])
+app.include_router(project_templates.router, prefix=f"{P}/project-templates", tags=["Projects"])
 app.include_router(projects.router, prefix=f"{P}/projects", tags=["Projects"])
 app.include_router(tasks.router, prefix=f"{P}/tasks", tags=["Tasks"])
 app.include_router(notes.router, prefix=f"{P}/notes", tags=["Notes"])
