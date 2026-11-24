@@ -84,3 +84,62 @@ def test_insights_relate_mood_and_energy_to_what_gets_done(client, auth):
         db.query(MoodEntry).filter(MoodEntry.day < today - timedelta(days=5)).delete()
         db.commit()
     assert all(v is None for v in client.get(f"{M}/insights", headers=auth).json()["correlations"].values())
+
+
+def test_evening_reminder_only_when_not_logged(client, auth):
+    from app.models import User
+    from app.services import notify
+
+    # Desactivado por defecto; se activa en Ajustes con la hora (entre las 12 y las 23)
+    me = client.get("/api/v1/auth/me", headers=auth).json()
+    assert me["mood_reminder"] is False and me["mood_reminder_hour"] == 21
+    assert client.put("/api/v1/auth/me", headers=auth, json={"mood_reminder_hour": 9}).status_code == 422
+    me = client.put("/api/v1/auth/me", headers=auth, json={"mood_reminder": True, "mood_reminder_hour": 20}).json()
+    assert me["mood_reminder"] and me["mood_reminder_hour"] == 20
+
+    day = date.today()
+    at = lambda hh, mm: datetime(day.year, day.month, day.day, hh, mm, tzinfo=timezone.utc)  # zona del usuario: UTC
+    with SessionLocal() as db:
+        user = db.query(User).one()
+        assert notify.gather(db, user, at(19, 59)) == []
+        notices = notify.gather(db, user, at(20, 1))
+        assert [(n["kind"], n["title"]) for n in notices] == [("mood", "¿Cómo ha ido el día?")]
+        assert notify._message(notices[0], timezone.utc)["notification"]["data"]["onActionClick"]["default"]["url"] == "/today"
+        db.commit()
+        assert notify.gather(db, user, at(22, 0)) == []  # una vez al día
+        # Si no llegó a ningún dispositivo, vuelve a quedar pendiente
+        notify._unmark(db, notices)
+        db.refresh(user)
+        assert user.last_mood_reminded_on is None
+        # Con el día ya registrado no hace falta avisar
+        db.add(MoodEntry(user_id=user.id, day=day, mood=3, energy=3))
+        db.commit()
+        assert notify.gather(db, user, at(21, 0)) == []
+
+    # La app abierta lo recibe por el mismo canal que los demás avisos
+    client.delete(f"{M}/{day}", headers=auth)
+    with SessionLocal() as db:
+        db.query(User).update({"last_mood_reminded_on": None, "mood_reminder_hour": 12})
+        db.commit()
+    polled = client.post("/api/v1/reminders/poll", headers=auth).json()
+    # La hora mínima es las 12: antes de eso (hora UTC del test) aún no toca
+    assert [r["kind"] for r in polled] == (["mood"] if datetime.now(timezone.utc).hour >= 12 else [])
+
+
+def test_weekly_review_includes_mood(client, auth):
+    today = date.today()
+    monday = today - timedelta(days=today.weekday())
+    for i, (m, e) in enumerate([(2, 3), (4, 4), (5, 3)]):
+        d = monday + timedelta(days=i)
+        if d <= today:
+            client.put(f"{M}/{d}", headers=auth, json={"mood": m, "energy": e})
+    prev = monday - timedelta(days=3)
+    if prev >= today - timedelta(days=30):
+        client.put(f"{M}/{prev}", headers=auth, json={"mood": 1, "energy": 1})
+    r = client.get("/api/v1/review", headers=auth, params={"week_start": monday.isoformat()}).json()["mood"]
+    logged = [(m, e) for i, (m, e) in enumerate([(2, 3), (4, 4), (5, 3)]) if monday + timedelta(days=i) <= today]
+    assert r["days"] == len(logged)
+    assert r["avg_mood"] == round(sum(m for m, _ in logged) / len(logged), 1)
+    assert r["prev_avg_mood"] == 1.0
+    best = max(range(len(logged)), key=lambda i: (logged[i][0], logged[i][1]))
+    assert r["best_day"] == (monday + timedelta(days=best)).isoformat()

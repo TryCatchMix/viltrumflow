@@ -57,6 +57,17 @@ import { ToastService } from '../core/toast.service';
           @default { <button class="btn" (click)="togglePush(true)"><app-icon name="bell" /> Activar</button> }
         }
       </div>
+      <div class="opt" id="mood">
+        <div><strong>Aviso del diario de ánimo</strong>
+          <p class="muted">Si a esa hora aún no has registrado cómo ha ido el día, te lo recuerda (en la app y, si los tienes activados, con la app cerrada).</p></div>
+        <div class="row">
+          <select class="input hour" [ngModel]="auth.user()?.mood_reminder_hour" (ngModelChange)="setPref({ mood_reminder_hour: $event })"
+            [ngModelOptions]="{ standalone: true }" [disabled]="!auth.user()?.mood_reminder" aria-label="Hora del aviso del diario">
+            @for (h of eveningHours; track h) { <option [ngValue]="h">{{ h }}:00</option> }
+          </select>
+          <input type="checkbox" [checked]="auth.user()?.mood_reminder" (change)="setPref({ mood_reminder: $any($event.target).checked })" aria-label="Activar el aviso del diario" />
+        </div>
+      </div>
       @if (!emailReady()) {
         <div class="box"><p class="muted">El envío de correos no está configurado en el servidor (variables <code>SMTP_*</code>, ver README). Los avisos por email no se enviarán hasta entonces.</p></div>
       }
@@ -150,6 +161,7 @@ export class SettingsComponent implements AfterViewInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   hours = Array.from({ length: 24 }, (_, i) => i);
+  eveningHours = Array.from({ length: 12 }, (_, i) => i + 12);
   emailReady = signal(true);
   result = signal<ImportResult | null>(null);
   overwrite = false;
@@ -199,7 +211,7 @@ export class SettingsComponent implements AfterViewInit {
       e => this.toast.error(e));
   }
 
-  setPref(data: { email_reminders?: boolean; daily_digest?: boolean; digest_hour?: number }) {
+  setPref(data: { email_reminders?: boolean; daily_digest?: boolean; digest_hour?: number; mood_reminder?: boolean; mood_reminder_hour?: number }) {
     this.auth.updateProfile(data).subscribe({ error: e => this.toast.error(e) });
   }
 

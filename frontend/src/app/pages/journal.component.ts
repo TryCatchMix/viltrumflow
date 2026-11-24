@@ -1,4 +1,6 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { AuthService } from '../core/auth.service';
 import { ENERGY_LEVELS, MOOD_LEVELS, MoodBand, MoodEntry, MoodInsights, MoodLog } from '../core/models';
 import { ApiService } from '../core/api.service';
 import { ToastService } from '../core/toast.service';
@@ -24,7 +26,7 @@ function strength(r: number | null): string | null {
 @Component({
   selector: 'app-journal',
   standalone: true,
-  imports: [MoodCheckinComponent, LineChartComponent, ColumnChartComponent, BarListComponent, IconComponent],
+  imports: [RouterLink, MoodCheckinComponent, LineChartComponent, ColumnChartComponent, BarListComponent, IconComponent],
   template: `
   <div class="page">
     <div class="page-head">
@@ -38,6 +40,10 @@ function strength(r: number | null): string | null {
     </div>
 
     <app-mood-checkin [showLink]="false" (changed)="load()" />
+    <p class="remind muted"><app-icon name="bell" [size]="13" />
+      @if (auth.user()?.mood_reminder) { Aviso por la tarde a las {{ auth.user()?.mood_reminder_hour }}:00 si aún no lo has registrado · <a routerLink="/settings" fragment="mood">Cambiar</a> }
+      @else { ¿Se te olvida? <a routerLink="/settings" fragment="mood">Activa un aviso por la tarde</a> }
+    </p>
 
     @if (ins(); as s) {
       <div class="tiles">
@@ -158,7 +164,8 @@ function strength(r: number | null): string | null {
   </div>`,
   styles: [`
     .seg { display: flex; gap: 4px; }
-    app-mood-checkin { margin-bottom: 14px; }
+    app-mood-checkin { margin-bottom: 8px; }
+    .remind { display: flex; align-items: center; gap: 6px; font-size: 12.5px; margin: 0 0 14px; }
     .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
     .tile { padding: 14px 16px; display: grid; gap: 2px;
       span { font-size: 12px; color: var(--text-2); } strong { font-size: 28px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; } small { color: var(--text-3); font-size: 12px; } }
@@ -196,6 +203,7 @@ function strength(r: number | null): string | null {
 export class JournalComponent implements OnInit {
   private api = inject(ApiService);
   private toast = inject(ToastService);
+  auth = inject(AuthService);
 
   ranges = RANGES; moods = MOOD_LEVELS; energies = ENERGY_LEVELS; shortWd = SHORT_WD; num = num;
   scale = { max: 5, ticks: [1, 2, 3, 4, 5] };

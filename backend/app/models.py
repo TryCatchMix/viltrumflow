@@ -72,6 +72,10 @@ class User(TimestampMixin, Base):
     pomodoro_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
     pomodoro_phase: Mapped[Optional[str]] = mapped_column(String(10))
     # Protectores de racha disponibles y último día ya revisado para gastarlos
+    # Aviso por la tarde si el día aún no tiene registro de ánimo
+    mood_reminder: Mapped[bool] = mapped_column(Boolean, default=False)
+    mood_reminder_hour: Mapped[int] = mapped_column(Integer, default=21)
+    last_mood_reminded_on: Mapped[Optional[date]] = mapped_column(Date)
     streak_freezes: Mapped[int] = mapped_column(Integer, default=0)
     freezes_checked_on: Mapped[Optional[date]] = mapped_column(Date)
 
@@ -361,6 +365,19 @@ class Reward(Base):
     repeatable: Mapped[bool] = mapped_column(Boolean, default=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ProjectTemplate(TimestampMixin, Base):
+    """Proyecto reutilizable: tareas (con subtareas) y su día relativo al inicio. Las tareas van en JSON."""
+
+    __tablename__ = "project_templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    color: Mapped[str] = mapped_column(String(7), default="#7c5cff")
+    tasks: Mapped[str] = mapped_column(Text, default="[]")
 
 
 class Goal(TimestampMixin, Base):

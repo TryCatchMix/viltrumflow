@@ -68,6 +68,8 @@ class UserUpdate(BaseModel):
     email_reminders: Optional[bool] = None
     daily_digest: Optional[bool] = None
     digest_hour: Optional[int] = Field(None, ge=0, le=23)
+    mood_reminder: Optional[bool] = None
+    mood_reminder_hour: Optional[int] = Field(None, ge=12, le=23)
 
     @field_validator("timezone")
     @classmethod
@@ -103,6 +105,8 @@ class UserOut(ORM):
     email_reminders: bool
     daily_digest: bool
     digest_hour: int
+    mood_reminder: bool = False
+    mood_reminder_hour: int = 21
     created_at: datetime
     last_login: Optional[datetime] = None
     has_password: bool = True
@@ -447,7 +451,7 @@ class ImportResult(BaseModel):
 
 # ---------- Recordatorios ----------
 class ReminderOut(Out):
-    kind: Literal["reminder", "assigned", "habit"] = "reminder"
+    kind: Literal["reminder", "assigned", "habit", "mood"] = "reminder"
     task_id: int
     title: str
     due_date: Optional[datetime] = None
